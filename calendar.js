@@ -1,12 +1,11 @@
 let SEARCH = null;
+let AVAIL = null;
 
 async function loadSearchIndex() {
   const resp = await fetch("data/search_index.json");
   SEARCH = await resp.json();
   console.warn("SEARCH:", SEARCH);
 }
-
-let AVAIL = null;
 
 async function loadAvailability() {
   const resp = await fetch("data/availability.json");
@@ -96,6 +95,18 @@ function renderTimeline() {
   const fields = dayData.fields;
   const merged = dayData.merged || [];
 
+  // ---- Build FIELD_MAP from JSON ----
+  const FIELD_MAP = {};
+  fields.forEach(f => {
+    FIELD_MAP[f.id] = {
+      id: f.id,
+      parent: f.name,     // THIS IS THE TRUE parent_field
+      type: f.complex,    // "full" or "half"
+      surface: f.surface,
+      location: f.location || null
+    };
+  });
+
   // ---- Group merged blocks by field ----
   const byField = {};
   merged.forEach(block => {
@@ -111,6 +122,8 @@ function renderTimeline() {
   // ---- Render each field ----
   fields.forEach(field => {
     const fid = field.id;
+    const parent = FIELD_MAP[fid].parent;
+    const type = FIELD_MAP[fid].type;
 
     tl.innerHTML += `
       <div class="timeline-field" style="
@@ -122,21 +135,21 @@ function renderTimeline() {
       ">
         <strong>${field.surface}</strong><br>
         Field ID: ${fid}<br>
-        Complex: ${field.complex}
+        Type: ${type}
       </div>
     `;
 
     // ---- FULL FIELD LOGIC ----
-    if (field.complex === "full") {
+    if (type === "full") {
       const fullAvail = dayData.availability[fid] || [];
 
-      // Find half fields belonging to this full field
-      const halfFields = dayData.complexes.half.filter(h => h.startsWith(field.id));
+      // Find half fields using parent_field relationship
+      const halfFields = fields.filter(f => f.name === fid && f.complex === "half");
 
       const halfUsage = [];
 
-      halfFields.forEach(hid => {
-        const events = dayData.events[hid] || [];
+      halfFields.forEach(h => {
+        const events = dayData.events[h.id] || [];
         events.forEach(ev => {
           halfUsage.push({ start: ev.start, end: ev.end });
         });
@@ -161,30 +174,32 @@ function renderTimeline() {
       });
     }
 
-    // ---- HALF FIELD LOGIC (merged blocks) ----
-    const blocks = byField[fid] || [];
+    // ---- HALF FIELD LOGIC ----
+    if (type === "half") {
+      const blocks = byField[fid] || [];
 
-    blocks.forEach(block => {
-      const color =
-        block.type === "free" ? "#d0e8ff" :
-        block.type === "practice" ? "#ffe5b4" :
-        "#f0f0f0";
+      blocks.forEach(block => {
+        const color =
+          block.type === "free" ? "#d0e8ff" :
+          block.type === "practice" ? "#ffe5b4" :
+          "#f0f0f0";
 
-      tl.innerHTML += `
-        <div class="timeline-block" style="
-          margin: 10px 0 10px 20px;
-          padding: 10px;
-          background: ${color};
-          border: 1px solid #999;
-          border-radius: 6px;
-          font-size: 14px;
-        ">
-          <strong>${block.type.toUpperCase()}</strong><br>
-          ${block.start_12} – ${block.end_12}<br>
-          ${block.title ? `Title: ${block.title}<br>` : ""}
-        </div>
-      `;
-    });
+        tl.innerHTML += `
+          <div class="timeline-block" style="
+            margin: 10px 0 10px 20px;
+            padding: 10px;
+            background: ${color};
+            border: 1px solid #999;
+            border-radius: 6px;
+            font-size: 14px;
+          ">
+            <strong>${block.type.toUpperCase()}</strong><br>
+            ${block.start_12} – ${block.end_12}<br>
+            ${block.title ? `Title: ${block.title}<br>` : ""}
+          </div>
+        `;
+      });
+    }
   });
 }
 
