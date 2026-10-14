@@ -3,8 +3,9 @@ let AVAIL = null;
 async function loadAvailability() {
   const resp = await fetch("data/availability.json");
   AVAIL = await resp.json();
-  console.log("Availability loaded:", AVAIL);
+  console.warn("AVAIL:", AVAIL);
 }
+
 
 
 console.log("calendar.js LOADED");
