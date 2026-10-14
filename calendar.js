@@ -207,7 +207,7 @@ function renderComplexFilters() {
       } else {
         SELECTED_COMPLEXES.add(cx);
       }
-      renderDayTimeline(AVAIL.days[currentDate]); // ← ONLY timeline updates
+      renderDayTimeline(AVAIL.days[currentDate]);
       renderComplexFilters();
     });
 
