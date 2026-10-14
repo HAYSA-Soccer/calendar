@@ -36,23 +36,40 @@ let currentDate = new Date();
 function renderTimeline() {
   const tl = document.getElementById("dayTimeline");
 
-  tl.innerHTML = `
-    <p>Timeline for ${formatHumanDate(formatDateKey(currentDate))}</p>
+  const dateKey = formatDateKey(currentDate);
 
-    <div class="timeline-block" style="
-      margin-top: 20px;
-      padding: 10px;
-      background: #c8f7c5;
-      border: 1px solid #7ac27a;
-      border-radius: 6px;
-      font-size: 14px;
-    ">
-      Hardcoded availability block<br>
-      3:00 PM – 4:30 PM<br>
-      Field: SUMNER A
-    </div>
+  // Timeline header
+  tl.innerHTML = `
+    <p>Timeline for ${formatHumanDate(dateKey)}</p>
   `;
+
+  // If no data for this date
+  if (!AVAIL || !AVAIL.days || !AVAIL.days[dateKey]) {
+    tl.innerHTML += `<p>No availability for this date.</p>`;
+    return;
+  }
+
+  const dayData = AVAIL.days[dateKey];
+
+  // Loop through fields for this date
+  dayData.fields.forEach(field => {
+    tl.innerHTML += `
+      <div class="timeline-block" style="
+        margin-top: 20px;
+        padding: 10px;
+        background: #c8f7c5;
+        border: 1px solid #7ac27a;
+        border-radius: 6px;
+        font-size: 14px;
+      ">
+        <strong>${field.surface}</strong><br>
+        Field ID: ${field.id}<br>
+        Complex: ${field.complex}
+      </div>
+    `;
+  });
 }
+
 
 
 // ---- INIT ----
