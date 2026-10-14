@@ -1,3 +1,12 @@
+let AVAIL = null;
+
+async function loadAvailability() {
+  const resp = await fetch("data/availability.json");
+  AVAIL = await resp.json();
+  console.log("Availability loaded:", AVAIL);
+}
+
+
 console.log("calendar.js LOADED");
 
 // ---- DATE HELPERS ----
@@ -46,10 +55,12 @@ function renderTimeline() {
 
 
 // ---- INIT ----
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   console.log("DOMContentLoaded fired");
+  await loadAvailability();
   render();
 });
+
 
 // ---- MAIN RENDER ----
 function render() {
