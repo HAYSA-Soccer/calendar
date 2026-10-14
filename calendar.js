@@ -1,3 +1,12 @@
+let SEARCH = null;
+
+async function loadSearchIndex() {
+  const resp = await fetch("data/search_index.json");
+  SEARCH = await resp.json();
+  console.warn("SEARCH:", SEARCH);
+}
+
+
 let AVAIL = null;
 
 async function loadAvailability() {
@@ -35,24 +44,22 @@ let currentDate = new Date();
 // ---- TIMELINE RENDER ----
 function renderTimeline() {
   const tl = document.getElementById("dayTimeline");
-
   const dateKey = formatDateKey(currentDate);
 
-  // Timeline header
   tl.innerHTML = `
     <p>Timeline for ${formatHumanDate(dateKey)}</p>
   `;
 
-  // If no data for this date
+  // If no availability for this date
   if (!AVAIL || !AVAIL.days || !AVAIL.days[dateKey]) {
     tl.innerHTML += `<p>No availability for this date.</p>`;
     return;
   }
 
-  const dayData = AVAIL.days[dateKey];
+  const dayFields = AVAIL.days[dateKey].fields;
 
-  // Loop through fields for this date
-  dayData.fields.forEach(field => {
+  // Render each field
+  dayFields.forEach(field => {
     tl.innerHTML += `
       <div class="timeline-block" style="
         margin-top: 20px;
@@ -68,6 +75,46 @@ function renderTimeline() {
       </div>
     `;
   });
+
+  // Now add time windows from search_index
+  if (SEARCH && SEARCH[dateKey]) {
+    const fullWindows = SEARCH[dateKey].full || [];
+    const halfWindows = SEARCH[dateKey].half || [];
+
+    fullWindows.forEach(win => {
+      tl.innerHTML += `
+        <div class="timeline-block" style="
+          margin-top: 20px;
+          padding: 10px;
+          background: #d0e8ff;
+          border: 1px solid #5aa0e0;
+          border-radius: 6px;
+          font-size: 14px;
+        ">
+          <strong>Full Field Window</strong><br>
+          ${win.start_12} – ${win.end_12}<br>
+          Fields: ${win.fields.join(", ")}
+        </div>
+      `;
+    });
+
+    halfWindows.forEach(win => {
+      tl.innerHTML += `
+        <div class="timeline-block" style="
+          margin-top: 20px;
+          padding: 10px;
+          background: #ffe5b4;
+          border: 1px solid #e0a85a;
+          border-radius: 6px;
+          font-size: 14px;
+        ">
+          <strong>Half Field Window</strong><br>
+          ${win.start_12} – ${win.end_12}<br>
+          Fields: ${win.fields.join(", ")}
+        </div>
+      `;
+    });
+  }
 }
 
 
@@ -76,8 +123,10 @@ function renderTimeline() {
 document.addEventListener("DOMContentLoaded", async () => {
   console.log("DOMContentLoaded fired");
   await loadAvailability();
+  await loadSearchIndex();
   render();
 });
+
 
 
 // ---- MAIN RENDER ----
