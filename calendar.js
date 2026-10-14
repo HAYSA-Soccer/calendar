@@ -1,3 +1,6 @@
+console.log("calendar.js LOADED");
+
+// ---- DATE HELPERS ----
 function formatDateKey(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -16,16 +19,22 @@ function formatHumanDate(dateStr) {
   });
 }
 
-
-console.log("calendar.js LOADED");
-
+// ---- GLOBAL STATE ----
 let currentDate = new Date();
 
+// ---- TIMELINE RENDER ----
+function renderTimeline() {
+  const tl = document.getElementById("dayTimeline");
+  tl.innerHTML = `<p>Timeline for ${formatHumanDate(formatDateKey(currentDate))}</p>`;
+}
+
+// ---- INIT ----
 document.addEventListener("DOMContentLoaded", () => {
   console.log("DOMContentLoaded fired");
   render();
 });
 
+// ---- MAIN RENDER ----
 function render() {
   const container = document.getElementById("view-container");
 
@@ -42,6 +51,7 @@ function render() {
     <p id="debugLine"></p>
   `;
 
+  // ---- BUTTON HANDLERS ----
   document.getElementById("prevDay").onclick = () => {
     currentDate.setDate(currentDate.getDate() - 1);
     render();
@@ -51,5 +61,7 @@ function render() {
     currentDate.setDate(currentDate.getDate() + 1);
     render();
   };
-}
 
+  // ---- UPDATE TIMELINE ----
+  renderTimeline();
+}
