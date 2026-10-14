@@ -25,8 +25,25 @@ let currentDate = new Date();
 // ---- TIMELINE RENDER ----
 function renderTimeline() {
   const tl = document.getElementById("dayTimeline");
-  tl.innerHTML = `<p>Timeline for ${formatHumanDate(formatDateKey(currentDate))}</p>`;
+
+  tl.innerHTML = `
+    <p>Timeline for ${formatHumanDate(formatDateKey(currentDate))}</p>
+
+    <div class="timeline-block" style="
+      margin-top: 20px;
+      padding: 10px;
+      background: #c8f7c5;
+      border: 1px solid #7ac27a;
+      border-radius: 6px;
+      font-size: 14px;
+    ">
+      Hardcoded availability block<br>
+      3:00 PM – 4:30 PM<br>
+      Field: SUMNER A
+    </div>
+  `;
 }
+
 
 // ---- INIT ----
 document.addEventListener("DOMContentLoaded", () => {
