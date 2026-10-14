@@ -18,3 +18,10 @@ body {
   font-size: 20px;
   font-weight: bold;
 }
+
+#dayTimeline {
+  margin-top: 20px;
+  padding: 20px;
+  background: #fafafa;
+  border: 1px solid #ddd;
+}
