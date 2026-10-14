@@ -131,7 +131,7 @@ function renderTimeline() {
       const fullAvail = dayData.availability[fid] || [];
 
       // Find half fields belonging to this full field
-      const halfFields = dayData.complexes.half.filter(h => h.startsWith(field.name));
+      const halfFields = dayData.complexes.half.filter(h => h.startsWith(field.id));
 
       const halfUsage = [];
 
