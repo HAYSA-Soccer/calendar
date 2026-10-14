@@ -35,6 +35,46 @@ function formatHumanDate(dateStr) {
   });
 }
 
+// ---- TIME CONVERSION ----
+function to12h(t) {
+  const [h, m] = t.split(":").map(Number);
+  const suffix = h >= 12 ? "PM" : "AM";
+  const hour = ((h + 11) % 12 + 1);
+  return `${hour}:${m.toString().padStart(2, "0")} ${suffix}`;
+}
+
+// ---- SUBTRACT HALF-FIELD USAGE FROM FULL-FIELD WINDOWS ----
+function subtractUsage(fullWindows, halfUsage) {
+  const result = [];
+
+  fullWindows.forEach(win => {
+    let segments = [{ start: win.start, end: win.end }];
+
+    halfUsage.forEach(use => {
+      const newSegments = [];
+
+      segments.forEach(seg => {
+        if (use.end <= seg.start || use.start >= seg.end) {
+          newSegments.push(seg);
+        } else {
+          if (use.start > seg.start) {
+            newSegments.push({ start: seg.start, end: use.start });
+          }
+          if (use.end < seg.end) {
+            newSegments.push({ start: use.end, end: seg.end });
+          }
+        }
+      });
+
+      segments = newSegments;
+    });
+
+    result.push(...segments);
+  });
+
+  return result;
+}
+
 // ---- GLOBAL STATE ----
 let currentDate = new Date();
 
@@ -56,22 +96,21 @@ function renderTimeline() {
   const fields = dayData.fields;
   const merged = dayData.merged || [];
 
-  // Group merged blocks by field
+  // ---- Group merged blocks by field ----
   const byField = {};
   merged.forEach(block => {
     if (!byField[block.field]) byField[block.field] = [];
     byField[block.field].push(block);
   });
 
-  // Sort blocks by start time
+  // ---- Sort blocks by start time ----
   Object.keys(byField).forEach(fid => {
     byField[fid].sort((a, b) => a.start.localeCompare(b.start));
   });
 
-  // Render each field with corrected availability
+  // ---- Render each field ----
   fields.forEach(field => {
     const fid = field.id;
-    const blocks = byField[fid] || [];
 
     tl.innerHTML += `
       <div class="timeline-field" style="
@@ -86,6 +125,44 @@ function renderTimeline() {
         Complex: ${field.complex}
       </div>
     `;
+
+    // ---- FULL FIELD LOGIC ----
+    if (field.complex === "full") {
+      const fullAvail = dayData.availability[fid] || [];
+
+      // Find half fields belonging to this full field
+      const halfFields = dayData.complexes.half.filter(h => h.startsWith(field.name));
+
+      const halfUsage = [];
+
+      halfFields.forEach(hid => {
+        const events = dayData.events[hid] || [];
+        events.forEach(ev => {
+          halfUsage.push({ start: ev.start, end: ev.end });
+        });
+      });
+
+      // Compute true availability
+      const trueAvail = subtractUsage(fullAvail, halfUsage);
+
+      trueAvail.forEach(win => {
+        tl.innerHTML += `
+          <div class="timeline-block" style="
+            margin: 10px 0 10px 20px;
+            padding: 10px;
+            background: #d0e8ff;
+            border: 1px solid #999;
+            border-radius: 6px;
+          ">
+            <strong>FREE</strong><br>
+            ${to12h(win.start)} – ${to12h(win.end)}
+          </div>
+        `;
+      });
+    }
+
+    // ---- HALF FIELD LOGIC (merged blocks) ----
+    const blocks = byField[fid] || [];
 
     blocks.forEach(block => {
       const color =
@@ -110,8 +187,6 @@ function renderTimeline() {
     });
   });
 }
-
-
 
 // ---- INIT ----
 document.addEventListener("DOMContentLoaded", async () => {
@@ -138,7 +213,6 @@ function render() {
     <p id="debugLine"></p>
   `;
 
-  // ---- BUTTON HANDLERS ----
   document.getElementById("prevDay").onclick = () => {
     currentDate.setDate(currentDate.getDate() - 1);
     render();
@@ -149,6 +223,5 @@ function render() {
     render();
   };
 
-  // ---- UPDATE TIMELINE ----
   renderTimeline();
 }
