@@ -47,7 +47,6 @@ function renderTimeline() {
     <p>Timeline for ${formatHumanDate(dateKey)}</p>
   `;
 
-  // If no availability for this date
   if (!AVAIL || !AVAIL.days || !AVAIL.days[dateKey]) {
     tl.innerHTML += `<p>No availability for this date.</p>`;
     return;
@@ -64,8 +63,16 @@ function renderTimeline() {
     byField[block.field].push(block);
   });
 
-  // Render each field WITH its timeline blocks
+  // Sort blocks by start time
+  Object.keys(byField).forEach(fid => {
+    byField[fid].sort((a, b) => a.start.localeCompare(b.start));
+  });
+
+  // Render each field with corrected availability
   fields.forEach(field => {
+    const fid = field.id;
+    const blocks = byField[fid] || [];
+
     tl.innerHTML += `
       <div class="timeline-field" style="
         margin-top: 25px;
@@ -75,21 +82,10 @@ function renderTimeline() {
         border-radius: 6px;
       ">
         <strong>${field.surface}</strong><br>
-        Field ID: ${field.id}<br>
+        Field ID: ${fid}<br>
         Complex: ${field.complex}
       </div>
     `;
-
-    const blocks = byField[field.id] || [];
-
-    if (blocks.length === 0) {
-      tl.innerHTML += `
-        <div style="margin-left:20px; color:#666;">
-          No blocks for this field.
-        </div>
-      `;
-      return;
-    }
 
     blocks.forEach(block => {
       const color =
@@ -114,6 +110,7 @@ function renderTimeline() {
     });
   });
 }
+
 
 
 // ---- INIT ----
