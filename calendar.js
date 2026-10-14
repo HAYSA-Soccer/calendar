@@ -6,7 +6,6 @@ async function loadSearchIndex() {
   console.warn("SEARCH:", SEARCH);
 }
 
-
 let AVAIL = null;
 
 async function loadAvailability() {
@@ -14,8 +13,6 @@ async function loadAvailability() {
   AVAIL = await resp.json();
   console.warn("AVAIL:", AVAIL);
 }
-
-
 
 console.log("calendar.js LOADED");
 
@@ -56,9 +53,10 @@ function renderTimeline() {
     return;
   }
 
-  const dayFields = AVAIL.days[dateKey].fields;
+  const dayData = AVAIL.days[dateKey];
+  const dayFields = dayData.fields;
 
-  // Render each field
+  // ---- Render each field (green blocks) ----
   dayFields.forEach(field => {
     tl.innerHTML += `
       <div class="timeline-block" style="
@@ -76,48 +74,32 @@ function renderTimeline() {
     `;
   });
 
-  // Now add time windows from search_index
-  if (SEARCH && SEARCH[dateKey]) {
-    const fullWindows = SEARCH[dateKey].full || [];
-    const halfWindows = SEARCH[dateKey].half || [];
+  // ---- Render merged time windows (free + practice) ----
+  if (dayData.merged && Array.isArray(dayData.merged)) {
+    dayData.merged.forEach(block => {
+      const color =
+        block.type === "free" ? "#d0e8ff" :
+        block.type === "practice" ? "#ffe5b4" :
+        "#e8e8e8";
 
-    fullWindows.forEach(win => {
       tl.innerHTML += `
         <div class="timeline-block" style="
           margin-top: 20px;
           padding: 10px;
-          background: #d0e8ff;
-          border: 1px solid #5aa0e0;
+          background: ${color};
+          border: 1px solid #999;
           border-radius: 6px;
           font-size: 14px;
         ">
-          <strong>Full Field Window</strong><br>
-          ${win.start_12} – ${win.end_12}<br>
-          Fields: ${win.fields.join(", ")}
-        </div>
-      `;
-    });
-
-    halfWindows.forEach(win => {
-      tl.innerHTML += `
-        <div class="timeline-block" style="
-          margin-top: 20px;
-          padding: 10px;
-          background: #ffe5b4;
-          border: 1px solid #e0a85a;
-          border-radius: 6px;
-          font-size: 14px;
-        ">
-          <strong>Half Field Window</strong><br>
-          ${win.start_12} – ${win.end_12}<br>
-          Fields: ${win.fields.join(", ")}
+          <strong>${block.type.toUpperCase()}</strong><br>
+          ${block.start_12} – ${block.end_12}<br>
+          Field: ${block.field}<br>
+          ${block.title ? `Title: ${block.title}<br>` : ""}
         </div>
       `;
     });
   }
 }
-
-
 
 // ---- INIT ----
 document.addEventListener("DOMContentLoaded", async () => {
@@ -126,8 +108,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadSearchIndex();
   render();
 });
-
-
 
 // ---- MAIN RENDER ----
 function render() {
