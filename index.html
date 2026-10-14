@@ -7,13 +7,15 @@
 </head>
 <body>
 
+  <!-- HEADER -->
   <header class="app-header">
     <h1>HAYSA Field Availability</h1>
   </header>
 
+  <!-- DATA TIMESTAMP -->
   <div id="dataTimestamp"></div>
 
-  <!-- Primary navigation -->
+  <!-- PRIMARY NAVIGATION -->
   <nav class="nav">
     <button data-view="day">Day</button>
     <button data-view="week">Week</button>
@@ -21,21 +23,22 @@
     <button data-view="search">Search</button>
   </nav>
 
-  <!-- Complex selection status -->
+  <!-- COMPLEX STATUS -->
   <div id="complex-status" class="complex-status"></div>
 
-  <!-- Complex filter buttons -->
+  <!-- COMPLEX FILTER BUTTONS -->
   <div id="complex-filters" class="complex-filter-bar"></div>
 
-  <!-- Main content (this gets replaced by renderDayView, renderWeekView, etc.) -->
+  <!-- MAIN CONTENT (Day/Week/Month/Search controls go here) -->
   <main id="view-container"></main>
 
-  <!-- TIMELINE CONTAINERS (must NOT be inside view-container) -->
-  <div id="dayTimeline" style="display:none;"></div>
-  <div id="weekTimeline" style="display:none;"></div>
-  <div id="monthTimeline" style="display:none;"></div>
-  <div id="searchTimeline" style="display:none;"></div>
+  <!-- TIMELINE CONTAINERS (always BELOW the main content) -->
+  <div id="dayTimeline"></div>
+  <div id="weekTimeline"></div>
+  <div id="monthTimeline"></div>
+  <div id="searchTimeline"></div>
 
+  <!-- SCRIPT -->
   <script src="calendar.js"></script>
 
 </body>
