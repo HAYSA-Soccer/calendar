@@ -1,1 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>HAYSA Field Availability</title>
+  <link rel="stylesheet" href="calendar.css">
+</head>
+<body>
 
+  <header class="app-header">
+    <h1>HAYSA Field Availability</h1>
+  </header>
+
+  <div id="dataTimestamp"></div>
+
+  <!-- Primary navigation -->
+  <nav class="nav">
+    <button data-view="day">Day</button>
+    <button data-view="week">Week</button>
+    <button data-view="month">Month</button>
+    <button data-view="search">Search</button>
+  </nav>
+
+  <!-- Complex selection status -->
+  <div id="complex-status" class="complex-status"></div>
+
+  <!-- Complex filter buttons -->
+  <div id="complex-filters" class="complex-filter-bar"></div>
+
+  <!-- Main content (this gets replaced by renderDayView, renderWeekView, etc.) -->
+  <main id="view-container"></main>
+
+  <!-- TIMELINE CONTAINERS (must NOT be inside view-container) -->
+  <div id="dayTimeline" style="display:none;"></div>
+  <div id="weekTimeline" style="display:none;"></div>
+  <div id="monthTimeline" style="display:none;"></div>
+  <div id="searchTimeline" style="display:none;"></div>
+
+  <script src="calendar.js"></script>
+
+</body>
+</html>
