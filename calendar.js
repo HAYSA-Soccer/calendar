@@ -54,37 +54,52 @@ function renderTimeline() {
   }
 
   const dayData = AVAIL.days[dateKey];
-  const dayFields = dayData.fields;
+  const fields = dayData.fields;
+  const merged = dayData.merged || [];
 
-  // ---- Render each field (green blocks) ----
-  dayFields.forEach(field => {
+  // Group merged blocks by field
+  const byField = {};
+  merged.forEach(block => {
+    if (!byField[block.field]) byField[block.field] = [];
+    byField[block.field].push(block);
+  });
+
+  // Render each field WITH its timeline blocks
+  fields.forEach(field => {
     tl.innerHTML += `
-      <div class="timeline-block" style="
-        margin-top: 20px;
+      <div class="timeline-field" style="
+        margin-top: 25px;
         padding: 10px;
-        background: #c8f7c5;
+        background: #e8ffe8;
         border: 1px solid #7ac27a;
         border-radius: 6px;
-        font-size: 14px;
       ">
         <strong>${field.surface}</strong><br>
         Field ID: ${field.id}<br>
         Complex: ${field.complex}
       </div>
     `;
-  });
 
-  // ---- Render merged time windows (free + practice) ----
-  if (dayData.merged && Array.isArray(dayData.merged)) {
-    dayData.merged.forEach(block => {
+    const blocks = byField[field.id] || [];
+
+    if (blocks.length === 0) {
+      tl.innerHTML += `
+        <div style="margin-left:20px; color:#666;">
+          No blocks for this field.
+        </div>
+      `;
+      return;
+    }
+
+    blocks.forEach(block => {
       const color =
         block.type === "free" ? "#d0e8ff" :
         block.type === "practice" ? "#ffe5b4" :
-        "#e8e8e8";
+        "#f0f0f0";
 
       tl.innerHTML += `
         <div class="timeline-block" style="
-          margin-top: 20px;
+          margin: 10px 0 10px 20px;
           padding: 10px;
           background: ${color};
           border: 1px solid #999;
@@ -93,13 +108,13 @@ function renderTimeline() {
         ">
           <strong>${block.type.toUpperCase()}</strong><br>
           ${block.start_12} – ${block.end_12}<br>
-          Field: ${block.field}<br>
           ${block.title ? `Title: ${block.title}<br>` : ""}
         </div>
       `;
     });
-  }
+  });
 }
+
 
 // ---- INIT ----
 document.addEventListener("DOMContentLoaded", async () => {
