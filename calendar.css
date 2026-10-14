@@ -25,3 +25,10 @@ body {
   background: #fafafa;
   border: 1px solid #ddd;
 }
+
+.timeline-block {
+  margin-top: 20px;
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 14px;
+}
