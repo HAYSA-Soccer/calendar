@@ -147,6 +147,20 @@ function mergeSameTimeBlocks(blocks) {
   return merged;
 }
 
+
+function classifyColor(status, title) {
+  if (status === "free") return "free"; // availability = green
+
+  const t = (title || "").toLowerCase();
+
+  if (t.includes("practice")) return "practice"; // green
+  if (t.includes("game") || t.includes("vs")) return "game"; // blue
+
+  return "admin"; // red
+}
+
+
+
 // ---- BUILD BLOCKS FOR A FIELD ----
 function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
   const type = FIELD_MAP[fieldId].type;
@@ -352,7 +366,7 @@ function renderTimeline() {
     };
   });
 
-  // Time ruler (every hour)
+  // Time ruler
   for (let h = START_HOUR; h <= END_HOUR; h++) {
     const top = (h - START_HOUR) * 60 * PIXELS_PER_MIN;
     const label = document.createElement("div");
@@ -366,12 +380,14 @@ function renderTimeline() {
   const legend = document.createElement("div");
   legend.className = "timeline-legend";
   legend.innerHTML = `
-    <span class="legend-item legend-free">Free</span>
-    <span class="legend-item legend-reserved">Reserved</span>
+    <span class="legend-item legend-free">Availability</span>
+    <span class="legend-item legend-practice">Practice</span>
+    <span class="legend-item legend-game">Game</span>
+    <span class="legend-item legend-admin">Admin</span>
   `;
   complexCol.appendChild(legend);
 
-  // Group fields by location (no Unknown)
+  // Group fields by location
   const complexes = {};
   fields.forEach(f => {
     const loc = FIELD_COMPLEX_MAP[f.id];
@@ -406,15 +422,14 @@ function renderTimeline() {
 
       const { events, freeFields, laneCount } = assignEventLanes(slice);
 
-      // availability gets its own lane
       const hasAvailabilityLane = freeFields.length > 0;
-      const totalLanes = laneCount + (hasAvailabilityLane ? 1 : 0) || 1;
+      const totalLanes = laneCount + (hasAvailabilityLane ? 1 : 0);
       const laneWidthPercent = 100 / totalLanes;
 
-      // Availability lane
+      // Availability lane (green)
       if (hasAvailabilityLane) {
         const blockDiv = document.createElement("div");
-        blockDiv.className = "timeline-block timeline-block-free";
+        blockDiv.className = "timeline-block timeline-free";
 
         blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
         blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
@@ -430,10 +445,12 @@ function renderTimeline() {
         complexRow.appendChild(blockDiv);
       }
 
-      // Event lanes
+      // Event lanes (green, blue, red)
       events.forEach(ev => {
         const blockDiv = document.createElement("div");
-        blockDiv.className = "timeline-block timeline-block-reserved";
+
+        const colorType = classifyColor(ev.status, ev.title);
+        blockDiv.className = `timeline-block timeline-${colorType}`;
 
         blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
         blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
@@ -453,6 +470,7 @@ function renderTimeline() {
     complexCol.appendChild(complexContainer);
   });
 }
+
 
 // ---- INIT ----
 document.addEventListener("DOMContentLoaded", async () => {
