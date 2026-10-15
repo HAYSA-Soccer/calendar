@@ -42,6 +42,11 @@ function to12h(t) {
   return `${hour}:${m.toString().padStart(2, "0")} ${suffix}`;
 }
 
+function timeToMinutes(t) {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+
 // ---- SUBTRACT HALF-FIELD USAGE FROM FULL-FIELD WINDOWS ----
 function subtractUsage(fullWindows, halfUsage) {
   const result = [];
@@ -74,10 +79,80 @@ function subtractUsage(fullWindows, halfUsage) {
   return result;
 }
 
+// ---- MERGE SAME-TIME BLOCKS ----
+function mergeSameTimeBlocks(blocks) {
+  const merged = [];
+
+  blocks.forEach(block => {
+    const existing = merged.find(b =>
+      b.start === block.start &&
+      b.end === block.end &&
+      b.type === block.type
+    );
+
+    if (existing) {
+      existing.titles = existing.titles || [];
+      if (block.title) existing.titles.push(block.title);
+    } else {
+      merged.push({
+        ...block,
+        titles: block.title ? [block.title] : []
+      });
+    }
+  });
+
+  return merged;
+}
+
+// ---- BUILD BLOCKS FOR A FIELD ----
+function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
+  const type = FIELD_MAP[fieldId].type;
+  let blocks = [];
+
+  if (type === "full") {
+    const fullAvail = dayData.availability[fieldId] || [];
+
+    const halfFields = dayData.fields.filter(f =>
+      f.name === fieldId && f.complex === "half"
+    );
+
+    const halfUsage = [];
+    halfFields.forEach(h => {
+      const events = dayData.events[h.id] || [];
+      events.forEach(ev => {
+        halfUsage.push({ start: ev.start, end: ev.end });
+      });
+    });
+
+    const trueAvail = subtractUsage(fullAvail, halfUsage);
+
+    blocks = trueAvail.map(win => ({
+      field: fieldId,
+      type: "free",
+      start: win.start,
+      end: win.end,
+      start_12: to12h(win.start),
+      end_12: to12h(win.end),
+      title: null
+    }));
+  }
+
+  if (type === "half") {
+    blocks = (dayData.merged[fieldId] || []).map(b => ({
+      ...b,
+      field: fieldId
+    }));
+  }
+
+  blocks = mergeSameTimeBlocks(blocks);
+  blocks.sort((a, b) => a.start.localeCompare(b.start));
+
+  return blocks;
+}
+
 // ---- GLOBAL STATE ----
 let currentDate = new Date();
 
-// ---- TIMELINE RENDER ----
 // ---- TIMELINE RENDER ----
 function renderTimeline() {
   const tl = document.getElementById("dayTimeline");
@@ -99,7 +174,6 @@ function renderTimeline() {
 
   const dayData = AVAIL.days[dateKey];
   const fields = dayData.fields;
-  const merged = dayData.merged || [];
 
   // ---- Build FIELD_MAP ----
   const FIELD_MAP = {};
@@ -111,13 +185,6 @@ function renderTimeline() {
       surface: f.surface,
       location: f.location || null
     };
-  });
-
-  // ---- Group merged blocks by field ----
-  const byField = {};
-  merged.forEach(block => {
-    if (!byField[block.field]) byField[block.field] = [];
-    byField[block.field].push(block);
   });
 
   // ---- Time ruler (8 AM → 9 PM) ----
@@ -141,90 +208,42 @@ function renderTimeline() {
     const row = document.createElement("div");
     row.className = "field-row";
 
-    // Field label
     const label = document.createElement("div");
     label.className = "field-label";
     label.textContent = `${field.surface} (${type})`;
     row.appendChild(label);
 
-    // FULL FIELD LOGIC
-    if (type === "full") {
-      const fullAvail = dayData.availability[fid] || [];
+    const blocks = buildFieldBlocks(fid, dayData, FIELD_MAP);
 
-      const halfFields = fields.filter(f => f.name === fid && f.complex === "half");
+    blocks.forEach(block => {
+      const div = document.createElement("div");
+      div.className = "timeline-block";
 
-      const halfUsage = [];
-      halfFields.forEach(h => {
-        const events = dayData.events[h.id] || [];
-        events.forEach(ev => {
-          halfUsage.push({ start: ev.start, end: ev.end });
-        });
-      });
+      const color =
+        block.type === "free" ? "#d0e8ff" :
+        block.type === "practice" ? "#ffe5b4" :
+        "#f0f0f0";
 
-      const trueAvail = subtractUsage(fullAvail, halfUsage);
+      div.style.background = color;
 
-      trueAvail.forEach(win => {
-        const block = document.createElement("div");
-        block.className = "timeline-block";
-        block.style.background = "#d0e8ff";
+      const startMin = timeToMinutes(block.start) - START_HOUR * 60;
+      const endMin = timeToMinutes(block.end) - START_HOUR * 60;
 
-        const startMin = timeToMinutes(win.start) - START_HOUR * 60;
-        const endMin = timeToMinutes(win.end) - START_HOUR * 60;
+      div.style.top = `${startMin}px`;
+      div.style.height = `${endMin - startMin}px`;
 
-        block.style.top = `${startMin * PIXELS_PER_MIN}px`;
-        block.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
+      div.innerHTML = `
+        <strong>${block.type.toUpperCase()}</strong><br>
+        ${block.start_12} – ${block.end_12}<br>
+        ${block.titles ? block.titles.join("<br>") : ""}
+      `;
 
-        block.innerHTML = `
-          <strong>FREE</strong><br>
-          ${to12h(win.start)} – ${to12h(win.end)}
-        `;
-
-        row.appendChild(block);
-      });
-    }
-
-    // HALF FIELD LOGIC
-    if (type === "half") {
-      const blocks = byField[fid] || [];
-
-      blocks.forEach(blockData => {
-        const block = document.createElement("div");
-        block.className = "timeline-block";
-
-        const color =
-          blockData.type === "free" ? "#d0e8ff" :
-          blockData.type === "practice" ? "#ffe5b4" :
-          "#f0f0f0";
-
-        block.style.background = color;
-
-        const startMin = timeToMinutes(blockData.start) - START_HOUR * 60;
-        const endMin = timeToMinutes(blockData.end) - START_HOUR * 60;
-
-        block.style.top = `${startMin * PIXELS_PER_MIN}px`;
-        block.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
-
-        block.innerHTML = `
-          <strong>${blockData.type.toUpperCase()}</strong><br>
-          ${blockData.start_12} – ${blockData.end_12}<br>
-          ${blockData.title ? `Title: ${blockData.title}` : ""}
-        `;
-
-        row.appendChild(block);
-      });
-    }
+      row.appendChild(div);
+    });
 
     fieldCol.appendChild(row);
   });
 }
-
-// ---- Convert HH:MM to minutes ----
-function timeToMinutes(t) {
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
-}
-
-
 
 // ---- INIT ----
 document.addEventListener("DOMContentLoaded", async () => {
