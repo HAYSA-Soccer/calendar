@@ -1,22 +1,4 @@
 {
-  "2026-10-13": {
-    "SUMNER/SEAN": null,
-    "JOYCE": null,
-    "TURF": [],
-    "full": [
-      {
-        "type": "free",
-        "start": "19:00",
-        "end": "21:00",
-        "start_12": "7:00 PM",
-        "end_12": "9:00 PM",
-        "fields": [
-          "H-HST"
-        ]
-      }
-    ],
-    "half": []
-  },
   "2026-10-14": {
     "SUMNER/SEAN": null,
     "JOYCE": null,
@@ -91,5 +73,6 @@
   "2026-10-18": {
     "full": [],
     "half": []
-  }
+  },
+  "Tue Oct 13 2026 00:00:00 GMT-0400 (Eastern Daylight Time)": {}
 }
