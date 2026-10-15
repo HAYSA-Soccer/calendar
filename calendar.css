@@ -1,28 +1,55 @@
+/* Container */
 #view-container {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   padding: 16px;
 }
 
-.filter-bar {
-  margin-bottom: 12px;
-  display: flex;
-  gap: 12px;
-}
-
+/* Controls */
 .controls {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   margin-bottom: 12px;
 }
 
-.day-date {
-  font-weight: 600;
+.controls button {
+  padding: 4px 8px;
 }
 
+/* Filter bar */
+.filter-bar {
+  margin-bottom: 12px;
+}
+
+.filter-button-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.filter-btn {
+  padding: 6px 12px;
+  border: 1px solid #ccc;
+  background: #f5f5f5;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.filter-btn:hover {
+  background: #e8e8e8;
+}
+
+.filter-btn.active {
+  background: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+/* Timeline layout */
 #dayTimeline {
   display: flex;
-  flex-direction: row;
   gap: 16px;
 }
 
@@ -35,81 +62,89 @@
 
 .time-label {
   position: absolute;
-  left: 0;
+  left: 4px;
   font-size: 11px;
+  line-height: 11px;
   color: #555;
 }
 
-/* Complex columns */
+/* Complex columns container */
 .timeline-complexes {
   display: flex;
-  flex-direction: row;
-  gap: 16px;
+  gap: 20px;
   flex: 1;
 }
 
+/* Complex column */
 .complex-column {
   flex: 1;
-  min-width: 260px;
+  min-width: 280px;
 }
 
 .complex-column h3 {
   margin: 0 0 4px 0;
-  font-size: 14px;
-  border-bottom: 1px solid #ccc;
-  padding-bottom: 2px;
+  font-size: 16px;
+}
+
+/* Complex row (timeline area) */
+.complex-row {
+  position: relative;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #fafafa;
+  overflow: hidden;
+  padding: 4px;
 }
 
 /* Legend */
 .timeline-legend {
-  width: 100%;
   margin-bottom: 8px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .legend-item {
   display: inline-block;
-  margin-right: 12px;
+  margin-right: 8px;
   padding: 2px 6px;
   border-radius: 4px;
-  border: 1px solid #ccc;
 }
 
 .legend-free {
-  background: #8fd18f;
+  background: #d4edda;
+  color: #155724;
 }
 
 .legend-reserved {
-  background: #ffe5b4;
-}
-
-/* Complex timeline area */
-.complex-row {
-  position: relative;
-  border-left: 1px solid #eee;
-  border-top: 1px solid #eee;
-  margin-top: 4px;
+  background: #ffeeba;
+  color: #856404;
 }
 
 /* Blocks */
 .timeline-block {
   position: absolute;
   box-sizing: border-box;
-  border-radius: 6px;
-  font-size: 11px;
   padding: 4px 6px;
+  font-size: 11px;
+  border-radius: 3px;
   overflow: hidden;
-  line-height: 1.3;
+  min-height: 20px;
 }
 
+/* Availability as background */
 .timeline-block-free {
-  background: #8fd18f;
-  border: 1px solid #4f9b4f;
-  color: #083608;
+  background: #d4edda;
+  color: #155724;
+  opacity: 0.35;
 }
 
+/* Events on top */
 .timeline-block-reserved {
-  background: #ffe5b4;
-  border: 1px solid #c89a4f;
-  color: #5a3b0a;
+  background: #ffeeba;
+  color: #856404;
+  border: 1px solid #f0c36d;
+}
+
+/* Day date */
+.day-date {
+  font-weight: 600;
 }
