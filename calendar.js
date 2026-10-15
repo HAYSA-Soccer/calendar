@@ -1,6 +1,11 @@
 let SEARCH = null;
 let AVAIL = null;
 
+// Filters
+let FILTER_COMPLEX = "all";
+let FILTER_FIELDS = new Set();
+
+// Load JSON
 async function loadSearchIndex() {
   const resp = await fetch("data/search_index.json");
   SEARCH = await resp.json();
@@ -10,8 +15,6 @@ async function loadAvailability() {
   const resp = await fetch("data/availability.json");
   AVAIL = await resp.json();
 }
-
-console.log("calendar.js LOADED");
 
 // ---- DATE HELPERS ----
 function formatDateKey(d) {
@@ -45,7 +48,7 @@ function timeToMinutes(t) {
   return h * 60 + m;
 }
 
-// ---- SUBTRACT HALF-FIELD USAGE FROM FULL-FIELD WINDOWS ----
+// ---- SUBTRACT HALF-FIELD USAGE ----
 function subtractUsage(fullWindows, halfUsage) {
   const result = [];
 
@@ -102,7 +105,7 @@ function mergeSameTimeBlocks(blocks) {
   return merged;
 }
 
-// ---- BUILD BLOCKS FOR A FIELD (FREE + EVENTS) ----
+// ---- BUILD BLOCKS FOR A FIELD ----
 function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
   const type = FIELD_MAP[fieldId].type;
   let blocks = [];
@@ -155,7 +158,7 @@ function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
   return blocks;
 }
 
-// ---- BUILD TIME SLICES FOR A COMPLEX ----
+// ---- BUILD TIME SLICES ----
 function buildComplexSlices(complexFields, dayData, FIELD_MAP) {
   const changePoints = new Set();
   const perFieldBlocks = {};
@@ -213,13 +216,12 @@ function buildComplexSlices(complexFields, dayData, FIELD_MAP) {
   return slices;
 }
 
-// ---- ASSIGN LANES FOR EVENTS IN A SLICE ----
+// ---- ASSIGN LANES ----
 function assignEventLanes(slice) {
   const events = slice.fields.filter(f => f.status !== "free");
   const lanes = [];
 
   events.forEach(ev => {
-    // simple lane assignment: next free lane
     let laneIndex = lanes.length;
     lanes.push(ev);
     ev._lane = laneIndex;
@@ -236,6 +238,41 @@ function assignEventLanes(slice) {
 
 // ---- GLOBAL STATE ----
 let currentDate = new Date();
+
+// ---- FILTER BAR ----
+function renderFilters(fields) {
+  const filterDiv = document.getElementById("filter-bar");
+  filterDiv.innerHTML = "";
+
+  const complexes = [...new Set(fields.map(f => f.location || "Unknown"))];
+
+  const complexSelect = document.createElement("select");
+  complexSelect.innerHTML = `<option value="all">All Complexes</option>`;
+  complexes.forEach(c => {
+    complexSelect.innerHTML += `<option value="${c}">${c}</option>`;
+  });
+  complexSelect.value = FILTER_COMPLEX;
+  complexSelect.onchange = () => {
+    FILTER_COMPLEX = complexSelect.value;
+    FILTER_FIELDS.clear();
+    render();
+  };
+
+  filterDiv.appendChild(complexSelect);
+
+  const fieldSelect = document.createElement("select");
+  fieldSelect.innerHTML = `<option value="all">All Fields</option>`;
+  fields.forEach(f => {
+    fieldSelect.innerHTML += `<option value="${f.id}">${f.surface}</option>`;
+  });
+  fieldSelect.onchange = () => {
+    FILTER_FIELDS.clear();
+    if (fieldSelect.value !== "all") FILTER_FIELDS.add(fieldSelect.value);
+    render();
+  };
+
+  filterDiv.appendChild(fieldSelect);
+}
 
 // ---- TIMELINE RENDER ----
 function renderTimeline() {
@@ -258,6 +295,8 @@ function renderTimeline() {
   const dayData = AVAIL.days[dateKey];
   const fields = dayData.fields;
 
+  renderFilters(fields);
+
   const FIELD_MAP = {};
   fields.forEach(f => {
     FIELD_MAP[f.id] = {
@@ -271,7 +310,7 @@ function renderTimeline() {
 
   const START_HOUR = 8;
   const END_HOUR = 21;
-  const PIXELS_PER_MIN = 2; // more vertical space
+  const PIXELS_PER_MIN = 2;
 
   // Time ruler
   for (let h = START_HOUR; h <= END_HOUR; h++) {
@@ -292,7 +331,7 @@ function renderTimeline() {
   `;
   complexCol.appendChild(legend);
 
-  // Group fields by complex/location
+  // Group fields by complex
   const complexes = {};
   fields.forEach(f => {
     const loc = f.location || "Unknown";
@@ -301,6 +340,14 @@ function renderTimeline() {
   });
 
   Object.keys(complexes).forEach(loc => {
+    if (FILTER_COMPLEX !== "all" && FILTER_COMPLEX !== loc) return;
+
+    const complexFields = complexes[loc].filter(f => {
+      return FILTER_FIELDS.size === 0 || FILTER_FIELDS.has(f.id);
+    });
+
+    if (complexFields.length === 0) return;
+
     const complexContainer = document.createElement("div");
     complexContainer.className = "complex-column";
 
@@ -313,7 +360,7 @@ function renderTimeline() {
     complexRow.style.height = `${(END_HOUR - START_HOUR) * 60 * PIXELS_PER_MIN}px`;
     complexContainer.appendChild(complexRow);
 
-    const slices = buildComplexSlices(complexes[loc], dayData, FIELD_MAP);
+    const slices = buildComplexSlices(complexFields, dayData, FIELD_MAP);
 
     slices.forEach(slice => {
       const startMin = timeToMinutes(slice.start) - START_HOUR * 60;
@@ -345,7 +392,7 @@ function renderTimeline() {
         complexRow.appendChild(blockDiv);
       });
 
-      // Availability lane (merged)
+      // Availability lane
       if (freeFields.length > 0) {
         const blockDiv = document.createElement("div");
         blockDiv.className = "timeline-block timeline-block-free";
@@ -385,6 +432,7 @@ function render() {
 
   container.innerHTML = `
     <h2>Day View</h2>
+    <div id="filter-bar" class="filter-bar"></div>
     <div class="controls">
       <button id="prevDay">←</button>
       <span class="day-date">${humanDate}</span>
