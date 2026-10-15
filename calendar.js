@@ -315,37 +315,6 @@ function renderFilters(fields, FIELD_COMPLEX_MAP) {
   filterDiv.appendChild(locContainer);
 }
 
-
-  filterDiv.appendChild(locContainer);
-
-  // Field buttons
-  const fieldContainer = document.createElement("div");
-  fieldContainer.className = "filter-button-group";
-
-  const allFieldBtn = document.createElement("button");
-  allFieldBtn.textContent = "All Fields";
-  allFieldBtn.className = FILTER_FIELDS.size === 0 ? "filter-btn active" : "filter-btn";
-  allFieldBtn.onclick = () => {
-    FILTER_FIELDS.clear();
-    render();
-  };
-  fieldContainer.appendChild(allFieldBtn);
-
-  fields.forEach(f => {
-    const btn = document.createElement("button");
-    btn.textContent = f.surface;
-    btn.className = FILTER_FIELDS.has(f.id) ? "filter-btn active" : "filter-btn";
-    btn.onclick = () => {
-      FILTER_FIELDS.clear();
-      FILTER_FIELDS.add(f.id);
-      render();
-    };
-    fieldContainer.appendChild(btn);
-  });
-
-  filterDiv.appendChild(fieldContainer);
-}
-
 // ---- TIMELINE RENDER ----
 function renderTimeline() {
   const tl = document.getElementById("dayTimeline");
