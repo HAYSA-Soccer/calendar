@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      WEBAPP_URL: "https://script.google.com/macros/s/AKfycbwXJNZcjSDtIsktUFheZngN0a85ig_qd5S_D9mnJTvx7PaFqTRzF-Wm4twUlNIjp6mo/exec"
+      WEBAPP_URL: "https://script.google.com/macros/s/AKfycbz3dMJtYEYxPmoZmuacrM5dBGZ9Jbh5rW3OFtOQDXYyt2RRW41z41HQ4mui5EVzKJyQ/exec"
 
     steps:
       - name: Checkout repo
@@ -26,7 +26,13 @@ jobs:
         id: season
         run: |
           echo "🔎 Fetching season window..."
-          RAW=$(curl -sSL "$WEBAPP_URL?mode=season_window")
+
+          # Retry logic (Apps Script sometimes cold-starts)
+          for i in {1..5}; do
+            RAW=$(curl -sSL "$WEBAPP_URL?mode=season_window") && break
+            echo "Retry $i..."
+            sleep $((i * 2))
+          done
 
           CLEAN=$(echo "$RAW" | sed -n 's/.*<pre>\(.*\)<\/pre>.*/\1/p')
           if [ -z "$CLEAN" ]; then CLEAN="$RAW"; fi
@@ -57,7 +63,13 @@ jobs:
           mkdir -p data/tmp_days data/tmp_search
 
           echo "🔎 Fetching fields..."
-          FIELDS_RAW=$(curl -sSL "$WEBAPP_URL?mode=fields")
+
+          for i in {1..5}; do
+            FIELDS_RAW=$(curl -sSL "$WEBAPP_URL?mode=fields") && break
+            echo "Retry $i..."
+            sleep $((i * 2))
+          done
+
           FIELDS_CLEAN=$(echo "$FIELDS_RAW" | sed -n 's/.*<pre>\(.*\)<\/pre>.*/\1/p')
           if [ -z "$FIELDS_CLEAN" ]; then FIELDS_CLEAN="$FIELDS_RAW"; fi
 
@@ -77,7 +89,11 @@ jobs:
             echo "----------------------------------------"
             echo "📅 Processing date: $CURRENT"
 
-            RAW_DAY=$(curl -sSL "$WEBAPP_URL?mode=day_calendar&date=$CURRENT")
+            for i in {1..5}; do
+              RAW_DAY=$(curl -sSL "$WEBAPP_URL?mode=day_calendar&date=$CURRENT") && break
+              echo "Retry $i..."
+              sleep $((i * 2))
+            done
 
             CLEAN_DAY=$(echo "$RAW_DAY" | sed -n 's/.*<pre>\(.*\)<\/pre>.*/\1/p')
             if [ -z "$CLEAN_DAY" ]; then CLEAN_DAY="$RAW_DAY"; fi
