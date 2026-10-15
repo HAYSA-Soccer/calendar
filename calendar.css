@@ -148,3 +148,27 @@
 .day-date {
   font-weight: 600;
 }
+
+.timeline-free {
+  background: #b6e8b0;
+  color: #0a4f0a;
+  border: 1px solid #8ac98a;
+}
+
+.timeline-practice {
+  background: #b6e8b0;
+  color: #0a4f0a;
+  border: 1px solid #8ac98a;
+}
+
+.timeline-game {
+  background: #9ec5ff;
+  color: #003d80;
+  border: 1px solid #6aa0e8;
+}
+
+.timeline-admin {
+  background: #ffb3b3;
+  color: #7a0000;
+  border: 1px solid #e88a8a;
+}
