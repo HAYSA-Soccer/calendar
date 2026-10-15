@@ -34,7 +34,7 @@ function formatHumanDate(dateStr) {
   });
 }
 
-// ---- TIME CONVERSION ----
+// ---- TIME HELPERS ----
 function to12h(t) {
   const [h, m] = t.split(":").map(Number);
   const suffix = h >= 12 ? "PM" : "AM";
@@ -104,7 +104,7 @@ function mergeSameTimeBlocks(blocks) {
   return merged;
 }
 
-// ---- BUILD BLOCKS FOR A FIELD ----
+// ---- BUILD BLOCKS FOR A FIELD (FREE + EVENTS, MERGED + SORTED) ----
 function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
   const type = FIELD_MAP[fieldId].type;
   let blocks = [];
@@ -138,7 +138,8 @@ function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
   }
 
   if (type === "half") {
-    blocks = (dayData.merged[fieldId] || []).map(b => ({
+    const mergedByField = dayData.merged || {};
+    blocks = (mergedByField[fieldId] || []).map(b => ({
       ...b,
       field: fieldId
     }));
@@ -161,19 +162,20 @@ function renderTimeline() {
   tl.innerHTML = `
     <p>Timeline for ${formatHumanDate(dateKey)}</p>
     <div class="timeline-times"></div>
-    <div class="timeline-fields"></div>
+    <div class="timeline-complexes"></div>
   `;
 
   const timeCol = tl.querySelector(".timeline-times");
-  const fieldCol = tl.querySelector(".timeline-fields");
+  const complexCol = tl.querySelector(".timeline-complexes");
 
   if (!AVAIL || !AVAIL.days || !AVAIL.days[dateKey]) {
-    fieldCol.innerHTML = `<p>No availability for this date.</p>`;
+    complexCol.innerHTML = `<p>No availability for this date.</p>`;
     return;
   }
 
   const dayData = AVAIL.days[dateKey];
   const fields = dayData.fields;
+  const complexesMeta = dayData.complexes || { full: [], half: [] };
 
   // ---- Build FIELD_MAP ----
   const FIELD_MAP = {};
@@ -181,9 +183,9 @@ function renderTimeline() {
     FIELD_MAP[f.id] = {
       id: f.id,
       parent: f.name,
-      type: f.complex,
+      type: f.complex,      // "full" or "half"
       surface: f.surface,
-      location: f.location || null
+      location: f.location || "Unknown"
     };
   });
 
@@ -195,53 +197,86 @@ function renderTimeline() {
   for (let h = START_HOUR; h <= END_HOUR; h++) {
     const top = (h - START_HOUR) * 60 * PIXELS_PER_MIN;
     const label = document.createElement("div");
+    label.style.position = "absolute";
     label.style.top = `${top}px`;
     label.textContent = to12h(`${String(h).padStart(2, "0")}:00`);
     timeCol.appendChild(label);
   }
 
-  // ---- Render each field row ----
-  fields.forEach(field => {
-    const fid = field.id;
-    const type = FIELD_MAP[fid].type;
+  // ---- Group fields by complex (using location) ----
+  const complexes = {};
+  fields.forEach(f => {
+    const loc = f.location || "Unknown";
+    if (!complexes[loc]) complexes[loc] = [];
+    complexes[loc].push(f);
+  });
 
-    const row = document.createElement("div");
-    row.className = "field-row";
+  // ---- Render each complex as a column ----
+  Object.keys(complexes).forEach(loc => {
+    const complexContainer = document.createElement("div");
+    complexContainer.className = "complex-column";
+    complexContainer.style.display = "inline-block";
+    complexContainer.style.verticalAlign = "top";
+    complexContainer.style.marginRight = "20px";
 
-    const label = document.createElement("div");
-    label.className = "field-label";
-    label.textContent = `${field.surface} (${type})`;
-    row.appendChild(label);
+    const complexHeader = document.createElement("h3");
+    complexHeader.textContent = loc;
+    complexContainer.appendChild(complexHeader);
 
-    const blocks = buildFieldBlocks(fid, dayData, FIELD_MAP);
+    complexes[loc].forEach(field => {
+      const fid = field.id;
 
-    blocks.forEach(block => {
-      const div = document.createElement("div");
-      div.className = "timeline-block";
+      const row = document.createElement("div");
+      row.className = "field-row";
+      row.style.position = "relative";
+      row.style.height = `${(END_HOUR - START_HOUR) * 60 * PIXELS_PER_MIN}px`;
+      row.style.borderBottom = "1px solid #ddd";
+      row.style.marginBottom = "20px";
 
-      const color =
-        block.type === "free" ? "#d0e8ff" :
-        block.type === "practice" ? "#ffe5b4" :
-        "#f0f0f0";
+      const label = document.createElement("div");
+      label.className = "field-label";
+      label.textContent = `${field.surface} (${FIELD_MAP[fid].type})`;
+      row.appendChild(label);
 
-      div.style.background = color;
+      const blocks = buildFieldBlocks(fid, dayData, FIELD_MAP);
 
-      const startMin = timeToMinutes(block.start) - START_HOUR * 60;
-      const endMin = timeToMinutes(block.end) - START_HOUR * 60;
+      blocks.forEach(block => {
+        const div = document.createElement("div");
+        div.className = "timeline-block";
+        div.style.position = "absolute";
+        div.style.left = "0px";
+        div.style.right = "0px";
 
-      div.style.top = `${startMin}px`;
-      div.style.height = `${endMin - startMin}px`;
+        const color =
+          block.type === "free" ? "#d0e8ff" :
+          block.type === "practice" ? "#ffe5b4" :
+          "#f0f0f0";
 
-      div.innerHTML = `
-        <strong>${block.type.toUpperCase()}</strong><br>
-        ${block.start_12} – ${block.end_12}<br>
-        ${block.titles ? block.titles.join("<br>") : ""}
-      `;
+        div.style.background = color;
+        div.style.border = "1px solid #999";
+        div.style.borderRadius = "6px";
+        div.style.fontSize = "12px";
+        div.style.padding = "4px 8px";
 
-      row.appendChild(div);
+        const startMin = timeToMinutes(block.start) - START_HOUR * 60;
+        const endMin = timeToMinutes(block.end) - START_HOUR * 60;
+
+        div.style.top = `${startMin * PIXELS_PER_MIN}px`;
+        div.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
+
+        div.innerHTML = `
+          <strong>${block.type.toUpperCase()}</strong><br>
+          ${block.start_12} – ${block.end_12}<br>
+          ${block.titles ? block.titles.join("<br>") : ""}
+        `;
+
+        row.appendChild(div);
+      });
+
+      complexContainer.appendChild(row);
     });
 
-    fieldCol.appendChild(row);
+    complexCol.appendChild(complexContainer);
   });
 }
 
@@ -268,7 +303,8 @@ function render() {
       <button id="nextDay">→</button>
     </div>
     <p id="debugLine"></p>
-  `;
+    <div id="dayTimeline"></div>
+ `;
 
   document.getElementById("prevDay").onclick = () => {
     currentDate.setDate(currentDate.getDate() - 1);
