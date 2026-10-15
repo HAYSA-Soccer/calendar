@@ -1,3 +1,5 @@
+// calendar.js — full rewrite with location fixes, button filters, compact timeline
+
 let SEARCH = null;
 let AVAIL = null;
 
@@ -50,23 +52,35 @@ function timeToMinutes(t) {
 
 // ---- LOCATION HELPERS ----
 function capitalizeLocation(raw) {
-  if (!raw) return "Unknown";
+  if (!raw) return null;
   return raw
     .toLowerCase()
     .replace(/\b\w/g, c => c.toUpperCase());
 }
 
+// Build field → location map for a given day
 function buildFieldComplexMapForDay(dayData) {
   const map = {};
   const eventsByField = dayData.events || {};
 
+  // 1. Assign locations from events (field_group)
   Object.keys(eventsByField).forEach(fieldId => {
     eventsByField[fieldId].forEach(ev => {
       if (ev.field_group) {
         const loc = capitalizeLocation(ev.field_group);
-        map[fieldId] = loc;
+        if (loc) map[fieldId] = loc;
       }
     });
+  });
+
+  // 2. Assign missing fields based on parent full-field
+  dayData.fields.forEach(f => {
+    if (!map[f.id]) {
+      const parent = f.name; // full-field parent id
+      if (map[parent]) {
+        map[f.id] = map[parent];
+      }
+    }
   });
 
   return map;
@@ -256,46 +270,74 @@ function assignEventLanes(slice) {
   return {
     events,
     freeFields,
-    laneCount: lanes.length
+    laneCount: Math.max(lanes.length, 2) // ensure at least 2 lanes so single-field looks better
   };
 }
 
 // ---- GLOBAL STATE ----
 let currentDate = new Date();
 
-// ---- FILTER BAR ----
+// ---- FILTER BAR (BUTTONS) ----
 function renderFilters(fields, FIELD_COMPLEX_MAP) {
   const filterDiv = document.getElementById("filter-bar");
   filterDiv.innerHTML = "";
 
-  const complexes = [...new Set(fields.map(f => FIELD_COMPLEX_MAP[f.id] || "Unknown"))];
+  const locations = [...new Set(fields.map(f => FIELD_COMPLEX_MAP[f.id]).filter(Boolean))];
 
-  const complexSelect = document.createElement("select");
-  complexSelect.innerHTML = `<option value="all">All Locations</option>`;
-  complexes.forEach(c => {
-    complexSelect.innerHTML += `<option value="${c}">${c}</option>`;
-  });
-  complexSelect.value = FILTER_COMPLEX;
-  complexSelect.onchange = () => {
-    FILTER_COMPLEX = complexSelect.value;
+  // Location buttons
+  const locContainer = document.createElement("div");
+  locContainer.className = "filter-button-group";
+
+  const allLocBtn = document.createElement("button");
+  allLocBtn.textContent = "All Locations";
+  allLocBtn.className = FILTER_COMPLEX === "all" ? "filter-btn active" : "filter-btn";
+  allLocBtn.onclick = () => {
+    FILTER_COMPLEX = "all";
     FILTER_FIELDS.clear();
     render();
   };
+  locContainer.appendChild(allLocBtn);
 
-  filterDiv.appendChild(complexSelect);
+  locations.forEach(loc => {
+    const btn = document.createElement("button");
+    btn.textContent = loc;
+    btn.className = FILTER_COMPLEX === loc ? "filter-btn active" : "filter-btn";
+    btn.onclick = () => {
+      FILTER_COMPLEX = loc;
+      FILTER_FIELDS.clear();
+      render();
+    };
+    locContainer.appendChild(btn);
+  });
 
-  const fieldSelect = document.createElement("select");
-  fieldSelect.innerHTML = `<option value="all">All Fields</option>`;
+  filterDiv.appendChild(locContainer);
+
+  // Field buttons
+  const fieldContainer = document.createElement("div");
+  fieldContainer.className = "filter-button-group";
+
+  const allFieldBtn = document.createElement("button");
+  allFieldBtn.textContent = "All Fields";
+  allFieldBtn.className = FILTER_FIELDS.size === 0 ? "filter-btn active" : "filter-btn";
+  allFieldBtn.onclick = () => {
+    FILTER_FIELDS.clear();
+    render();
+  };
+  fieldContainer.appendChild(allFieldBtn);
+
   fields.forEach(f => {
-    fieldSelect.innerHTML += `<option value="${f.id}">${f.surface}</option>`;
+    const btn = document.createElement("button");
+    btn.textContent = f.surface;
+    btn.className = FILTER_FIELDS.has(f.id) ? "filter-btn active" : "filter-btn";
+    btn.onclick = () => {
+      FILTER_FIELDS.clear();
+      FILTER_FIELDS.add(f.id);
+      render();
+    };
+    fieldContainer.appendChild(btn);
   });
-  fieldSelect.onchange = () => {
-    FILTER_FIELDS.clear();
-    if (fieldSelect.value !== "all") FILTER_FIELDS.add(fieldSelect.value);
-    render();
-  };
 
-  filterDiv.appendChild(fieldSelect);
+  filterDiv.appendChild(fieldContainer);
 }
 
 // ---- TIMELINE RENDER ----
@@ -319,7 +361,7 @@ function renderTimeline() {
   const dayData = AVAIL.days[dateKey];
   const fields = dayData.fields;
 
-  // Build per‑day field → location map from events
+  // Build per‑day field → location map from events + parent inheritance
   const FIELD_COMPLEX_MAP = buildFieldComplexMapForDay(dayData);
 
   renderFilters(fields, FIELD_COMPLEX_MAP);
@@ -331,13 +373,13 @@ function renderTimeline() {
       parent: f.name,
       type: f.complex,
       surface: f.surface,
-      location: FIELD_COMPLEX_MAP[f.id] || "Unknown"
+      location: FIELD_COMPLEX_MAP[f.id] || null
     };
   });
 
   const START_HOUR = 8;
   const END_HOUR = 21;
-  const PIXELS_PER_MIN = 1.2;
+  const PIXELS_PER_MIN = 1; // compact vertical spacing
 
   // Time ruler
   for (let h = START_HOUR; h <= END_HOUR; h++) {
@@ -358,10 +400,11 @@ function renderTimeline() {
   `;
   complexCol.appendChild(legend);
 
-  // Group fields by location (field_group)
+  // Group fields by location (no Unknown)
   const complexes = {};
   fields.forEach(f => {
-    const loc = FIELD_COMPLEX_MAP[f.id] || "Unknown";
+    const loc = FIELD_COMPLEX_MAP[f.id];
+    if (!loc) return;
     if (!complexes[loc]) complexes[loc] = [];
     complexes[loc].push(f);
   });
