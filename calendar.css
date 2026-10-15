@@ -3,6 +3,12 @@
   padding: 16px;
 }
 
+.filter-bar {
+  margin-bottom: 12px;
+  display: flex;
+  gap: 12px;
+}
+
 .controls {
   display: flex;
   align-items: center;
@@ -44,7 +50,7 @@
 
 .complex-column {
   flex: 1;
-  min-width: 220px;
+  min-width: 260px;
 }
 
 .complex-column h3 {
