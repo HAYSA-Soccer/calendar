@@ -410,10 +410,11 @@ function renderTimeline() {
   const complexes = {};
   fields.forEach(f => {
     const loc = FIELD_COMPLEX_MAP[f.id];
-    if (!loc) return;
+    if (!loc) return; // Unknown removed
     if (!complexes[loc]) complexes[loc] = [];
     complexes[loc].push(f);
   });
+
 
   Object.keys(complexes).forEach(loc => {
     if (FILTER_COMPLEX !== "all" && FILTER_COMPLEX !== loc) return;
