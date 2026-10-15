@@ -282,33 +282,39 @@ function renderFilters(fields, FIELD_COMPLEX_MAP) {
   const filterDiv = document.getElementById("filter-bar");
   filterDiv.innerHTML = "";
 
-  const locations = [...new Set(fields.map(f => FIELD_COMPLEX_MAP[f.id]).filter(Boolean))];
+  // Unique locations only
+  const locations = [...new Set(
+    fields.map(f => FIELD_COMPLEX_MAP[f.id]).filter(Boolean)
+  )];
 
-  // Location buttons
   const locContainer = document.createElement("div");
   locContainer.className = "filter-button-group";
 
-  const allLocBtn = document.createElement("button");
-  allLocBtn.textContent = "All Locations";
-  allLocBtn.className = FILTER_COMPLEX === "all" ? "filter-btn active" : "filter-btn";
-  allLocBtn.onclick = () => {
+  // ALL LOCATIONS button
+  const allBtn = document.createElement("button");
+  allBtn.textContent = "All Locations";
+  allBtn.className = FILTER_COMPLEX === "all" ? "filter-btn active" : "filter-btn";
+  allBtn.onclick = () => {
     FILTER_COMPLEX = "all";
-    FILTER_FIELDS.clear();
     render();
   };
-  locContainer.appendChild(allLocBtn);
+  locContainer.appendChild(allBtn);
 
+  // One button per location
   locations.forEach(loc => {
     const btn = document.createElement("button");
     btn.textContent = loc;
     btn.className = FILTER_COMPLEX === loc ? "filter-btn active" : "filter-btn";
     btn.onclick = () => {
       FILTER_COMPLEX = loc;
-      FILTER_FIELDS.clear();
       render();
     };
     locContainer.appendChild(btn);
   });
+
+  filterDiv.appendChild(locContainer);
+}
+
 
   filterDiv.appendChild(locContainer);
 
