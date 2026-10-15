@@ -102,7 +102,7 @@ function mergeSameTimeBlocks(blocks) {
   return merged;
 }
 
-// ---- BUILD BLOCKS FOR A FIELD (FREE + EVENTS, MERGED + SORTED) ----
+// ---- BUILD BLOCKS FOR A FIELD (FREE + EVENTS) ----
 function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
   const type = FIELD_MAP[fieldId].type;
   let blocks = [];
@@ -155,38 +155,63 @@ function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
   return blocks;
 }
 
-// ---- BUILD STITCHED COMPLEX ROWS (TIME-SLICED, ALL FIELDS TOGETHER) ----
-function buildComplexRows(complexFields, dayData, FIELD_MAP) {
-  const rowsByKey = {};
+// ---- BUILD TIME SLICES FOR A COMPLEX ----
+function buildComplexSlices(complexFields, dayData, FIELD_MAP) {
+  const changePoints = new Set();
+
+  const perFieldBlocks = {};
 
   complexFields.forEach(field => {
     const fid = field.id;
     const blocks = buildFieldBlocks(fid, dayData, FIELD_MAP);
+    perFieldBlocks[fid] = blocks;
 
-    blocks.forEach(block => {
-      const key = `${block.start}-${block.end}`;
-      if (!rowsByKey[key]) {
-        rowsByKey[key] = {
-          start: block.start,
-          end: block.end,
-          items: []
-        };
-      }
-
-      rowsByKey[key].items.push({
-        fieldId: fid,
-        fieldLabel: `${FIELD_MAP[fid].surface}`,
-        type: block.type,
-        title: block.title,
-        start_12: block.start_12,
-        end_12: block.end_12
-      });
+    blocks.forEach(b => {
+      changePoints.add(b.start);
+      changePoints.add(b.end);
     });
   });
 
-  const rows = Object.values(rowsByKey);
-  rows.sort((a, b) => a.start.localeCompare(b.start));
-  return rows;
+  const points = Array.from(changePoints).sort((a, b) => a.localeCompare(b));
+
+  const slices = [];
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const start = points[i];
+    const end = points[i + 1];
+
+    const slice = {
+      start,
+      end,
+      fields: []
+    };
+
+    complexFields.forEach(field => {
+      const fid = field.id;
+      const blocks = perFieldBlocks[fid];
+
+      let status = "free";
+      let title = null;
+
+      blocks.forEach(b => {
+        if (b.start <= start && b.end >= end && b.type !== "free") {
+          status = b.type;
+          title = (b.titles && b.titles.length) ? b.titles.join(", ") : b.title;
+        }
+      });
+
+      slice.fields.push({
+        id: fid,
+        label: FIELD_MAP[fid].surface,
+        status,
+        title
+      });
+    });
+
+    slices.push(slice);
+  }
+
+  return slices;
 }
 
 // ---- GLOBAL STATE ----
@@ -213,19 +238,17 @@ function renderTimeline() {
   const dayData = AVAIL.days[dateKey];
   const fields = dayData.fields;
 
-  // ---- Build FIELD_MAP ----
   const FIELD_MAP = {};
   fields.forEach(f => {
     FIELD_MAP[f.id] = {
       id: f.id,
       parent: f.name,
-      type: f.complex,      // "full" or "half"
+      type: f.complex,
       surface: f.surface,
       location: f.location || "Unknown"
     };
   });
 
-  // ---- Time ruler (8 AM → 9 PM) ----
   const START_HOUR = 8;
   const END_HOUR = 21;
   const PIXELS_PER_MIN = 1;
@@ -239,7 +262,14 @@ function renderTimeline() {
     timeCol.appendChild(label);
   }
 
-  // ---- Group fields by complex (using location) ----
+  const legend = document.createElement("div");
+  legend.className = "timeline-legend";
+  legend.innerHTML = `
+    <span class="legend-item legend-free">Free</span>
+    <span class="legend-item legend-reserved">Reserved</span>
+  `;
+  complexCol.appendChild(legend);
+
   const complexes = {};
   fields.forEach(f => {
     const loc = f.location || "Unknown";
@@ -247,7 +277,6 @@ function renderTimeline() {
     complexes[loc].push(f);
   });
 
-  // ---- Render each complex as a single stitched timeline ----
   Object.keys(complexes).forEach(loc => {
     const complexContainer = document.createElement("div");
     complexContainer.className = "complex-column";
@@ -262,46 +291,41 @@ function renderTimeline() {
     complexRow.style.height = `${(END_HOUR - START_HOUR) * 60 * PIXELS_PER_MIN}px`;
     complexContainer.appendChild(complexRow);
 
-    const rows = buildComplexRows(complexes[loc], dayData, FIELD_MAP);
+    const slices = buildComplexSlices(complexes[loc], dayData, FIELD_MAP);
 
-    rows.forEach(rowData => {
+    slices.forEach(slice => {
+      const startMin = timeToMinutes(slice.start) - START_HOUR * 60;
+      const endMin = timeToMinutes(slice.end) - START_HOUR * 60;
+
+      const reservedFields = slice.fields.filter(f => f.status !== "free");
+      const freeFields = slice.fields.filter(f => f.status === "free");
+
+      if (reservedFields.length === 0 && freeFields.length === 0) return;
+
       const blockDiv = document.createElement("div");
       blockDiv.className = "timeline-block";
-
-      const startMin = timeToMinutes(rowData.start) - START_HOUR * 60;
-      const endMin = timeToMinutes(rowData.end) - START_HOUR * 60;
-
       blockDiv.style.position = "absolute";
       blockDiv.style.left = "0px";
       blockDiv.style.right = "0px";
       blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
       blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
 
-      const freeItems = rowData.items.filter(i => i.type === "free");
-      const reservedItems = rowData.items.filter(i => i.type !== "free");
-
       let html = "";
 
-      if (freeItems.length > 0) {
-        const freeFields = freeItems.map(i => i.fieldLabel).join(", ");
-        html += `<strong>Available:</strong> ${freeFields}<br>`;
+      if (reservedFields.length > 0) {
+        reservedFields.forEach(f => {
+          const label = f.title || f.status.toUpperCase();
+          html += `${to12h(slice.start)} – ${to12h(slice.end)} ${label} — ${f.label}<br>`;
+        });
       }
 
-      reservedItems.forEach(item => {
-        const label = item.title ? item.title : item.type.toUpperCase();
-        html += `${item.start_12} – ${item.end_12} ${label} — ${item.fieldLabel}<br>`;
-      });
-
-      // If only free, still show time + fields
-      if (reservedItems.length === 0 && freeItems.length > 0) {
-        const timeLabel = `${to12h(rowData.start)} – ${to12h(rowData.end)}`;
-        const freeFields = freeItems.map(i => i.fieldLabel).join(", ");
-        html = `${timeLabel} ${freeFields}`;
+      if (freeFields.length > 0) {
+        const freeLabels = freeFields.map(f => f.label).join(", ");
+        html += `<strong>Available:</strong> ${freeLabels}<br>`;
       }
 
-      // Color: if any reserved, use reserved color; else free color
-      const hasReserved = reservedItems.length > 0;
-      blockDiv.style.background = hasReserved ? "#ffe5b4" : "#d0e8ff";
+      const hasReserved = reservedFields.length > 0;
+      blockDiv.style.background = hasReserved ? "#ffe5b4" : "#8fd18f";
       blockDiv.style.border = "1px solid #999";
       blockDiv.style.borderRadius = "6px";
       blockDiv.style.fontSize = "12px";
