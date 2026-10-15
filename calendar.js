@@ -85,10 +85,15 @@ function renderTimeline() {
 
   tl.innerHTML = `
     <p>Timeline for ${formatHumanDate(dateKey)}</p>
+    <div class="timeline-times"></div>
+    <div class="timeline-fields"></div>
   `;
 
+  const timeCol = tl.querySelector(".timeline-times");
+  const fieldCol = tl.querySelector(".timeline-fields");
+
   if (!AVAIL || !AVAIL.days || !AVAIL.days[dateKey]) {
-    tl.innerHTML += `<p>No availability for this date.</p>`;
+    fieldCol.innerHTML = `<p>No availability for this date.</p>`;
     return;
   }
 
@@ -96,58 +101,59 @@ function renderTimeline() {
   const fields = dayData.fields;
   const merged = dayData.merged || [];
 
-  // Build FIELD_MAP from JSON
+  // ---- Build FIELD_MAP ----
   const FIELD_MAP = {};
   fields.forEach(f => {
     FIELD_MAP[f.id] = {
       id: f.id,
-      parent: f.name,     // THIS IS THE TRUE parent_field
-      type: f.complex,    // "full" or "half"
+      parent: f.name,
+      type: f.complex,
       surface: f.surface,
       location: f.location || null
     };
   });
 
-  // Group merged blocks by field
+  // ---- Group merged blocks by field ----
   const byField = {};
   merged.forEach(block => {
     if (!byField[block.field]) byField[block.field] = [];
     byField[block.field].push(block);
   });
 
-  // Sort blocks by start time
-  Object.keys(byField).forEach(fid => {
-    byField[fid].sort((a, b) => a.start.localeCompare(b.start));
-  });
+  // ---- Time ruler (8 AM → 9 PM) ----
+  const START_HOUR = 8;
+  const END_HOUR = 21;
+  const PIXELS_PER_MIN = 1;
 
-  // Render each field
+  for (let h = START_HOUR; h <= END_HOUR; h++) {
+    const top = (h - START_HOUR) * 60 * PIXELS_PER_MIN;
+    const label = document.createElement("div");
+    label.style.top = `${top}px`;
+    label.textContent = to12h(`${String(h).padStart(2, "0")}:00`);
+    timeCol.appendChild(label);
+  }
+
+  // ---- Render each field row ----
   fields.forEach(field => {
     const fid = field.id;
     const type = FIELD_MAP[fid].type;
 
-    tl.innerHTML += `
-      <div class="timeline-field" style="
-        margin-top: 25px;
-        padding: 10px;
-        background: #e8ffe8;
-        border: 1px solid #7ac27a;
-        border-radius: 6px;
-      ">
-        <strong>${field.surface}</strong><br>
-        Field ID: ${fid}<br>
-        Type: ${type}
-      </div>
-    `;
+    const row = document.createElement("div");
+    row.className = "field-row";
 
-    // FULL FIELD LOGIC — USE parent_field
+    // Field label
+    const label = document.createElement("div");
+    label.className = "field-label";
+    label.textContent = `${field.surface} (${type})`;
+    row.appendChild(label);
+
+    // FULL FIELD LOGIC
     if (type === "full") {
       const fullAvail = dayData.availability[fid] || [];
 
-      // Find half fields using parent_field relationship
       const halfFields = fields.filter(f => f.name === fid && f.complex === "half");
 
       const halfUsage = [];
-
       halfFields.forEach(h => {
         const events = dayData.events[h.id] || [];
         events.forEach(ev => {
@@ -158,49 +164,66 @@ function renderTimeline() {
       const trueAvail = subtractUsage(fullAvail, halfUsage);
 
       trueAvail.forEach(win => {
-        tl.innerHTML += `
-          <div class="timeline-block" style="
-            margin: 10px 0 10px 20px;
-            padding: 10px;
-            background: #d0e8ff;
-            border: 1px solid #999;
-            border-radius: 6px;
-          ">
-            <strong>FREE</strong><br>
-            ${to12h(win.start)} – ${to12h(win.end)}
-          </div>
+        const block = document.createElement("div");
+        block.className = "timeline-block";
+        block.style.background = "#d0e8ff";
+
+        const startMin = timeToMinutes(win.start) - START_HOUR * 60;
+        const endMin = timeToMinutes(win.end) - START_HOUR * 60;
+
+        block.style.top = `${startMin * PIXELS_PER_MIN}px`;
+        block.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
+
+        block.innerHTML = `
+          <strong>FREE</strong><br>
+          ${to12h(win.start)} – ${to12h(win.end)}
         `;
+
+        row.appendChild(block);
       });
     }
 
-    // HALF FIELD LOGIC — USE merged[]
+    // HALF FIELD LOGIC
     if (type === "half") {
       const blocks = byField[fid] || [];
 
-      blocks.forEach(block => {
+      blocks.forEach(blockData => {
+        const block = document.createElement("div");
+        block.className = "timeline-block";
+
         const color =
-          block.type === "free" ? "#d0e8ff" :
-          block.type === "practice" ? "#ffe5b4" :
+          blockData.type === "free" ? "#d0e8ff" :
+          blockData.type === "practice" ? "#ffe5b4" :
           "#f0f0f0";
 
-        tl.innerHTML += `
-          <div class="timeline-block" style="
-            margin: 10px 0 10px 20px;
-            padding: 10px;
-            background: ${color};
-            border: 1px solid #999;
-            border-radius: 6px;
-            font-size: 14px;
-          ">
-            <strong>${block.type.toUpperCase()}</strong><br>
-            ${block.start_12} – ${block.end_12}<br>
-            ${block.title ? `Title: ${block.title}<br>` : ""}
-          </div>
+        block.style.background = color;
+
+        const startMin = timeToMinutes(blockData.start) - START_HOUR * 60;
+        const endMin = timeToMinutes(blockData.end) - START_HOUR * 60;
+
+        block.style.top = `${startMin * PIXELS_PER_MIN}px`;
+        block.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
+
+        block.innerHTML = `
+          <strong>${blockData.type.toUpperCase()}</strong><br>
+          ${blockData.start_12} – ${blockData.end_12}<br>
+          ${blockData.title ? `Title: ${blockData.title}` : ""}
         `;
+
+        row.appendChild(block);
       });
     }
+
+    fieldCol.appendChild(row);
   });
 }
+
+// ---- Convert HH:MM to minutes ----
+function timeToMinutes(t) {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+
 
 
 // ---- INIT ----
