@@ -138,8 +138,8 @@ function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
   }
 
   if (type === "half") {
-    const mergedByField = dayData.merged || {};
-    const rawBlocks = mergedByField[fieldId] || [];
+    // FIXED: merged is an array, not an object
+    const rawBlocks = (dayData.merged || []).filter(b => b.field === fieldId);
 
     blocks = rawBlocks.map(b => ({
       field: fieldId,
@@ -157,6 +157,7 @@ function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
 
   return blocks;
 }
+
 
 // ---- GLOBAL STATE ----
 let currentDate = new Date();
