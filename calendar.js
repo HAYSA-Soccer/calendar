@@ -244,7 +244,7 @@ function renderFilters(fields) {
   const filterDiv = document.getElementById("filter-bar");
   filterDiv.innerHTML = "";
 
-  const complexes = [...new Set(fields.map(f => f.location || "Unknown"))];
+  const complexes = [...new Set(fields.map(f => f.name))];
 
   const complexSelect = document.createElement("select");
   complexSelect.innerHTML = `<option value="all">All Complexes</option>`;
@@ -304,7 +304,7 @@ function renderTimeline() {
       parent: f.name,
       type: f.complex,
       surface: f.surface,
-      location: f.location || "Unknown"
+      location: f.name // THIS IS THE FIX
     };
   });
 
@@ -331,10 +331,10 @@ function renderTimeline() {
   `;
   complexCol.appendChild(legend);
 
-  // Group fields by complex
+  // Group fields by complex (using name)
   const complexes = {};
   fields.forEach(f => {
-    const loc = f.location || "Unknown";
+    const loc = f.name;
     if (!complexes[loc]) complexes[loc] = [];
     complexes[loc].push(f);
   });
