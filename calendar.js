@@ -149,11 +149,15 @@ function mergeSameTimeBlocks(blocks) {
 
 
 function classifyColor(ev) {
-  if (ev.status === "free") return "free";     // availability = green
-  if (ev.type === "practice") return "practice"; // practice = green
-  if (ev.type === "game") return "game";       // game = blue
-  return "admin";                              // everything else = red
+  const s = ev.status;
+
+  if (s === "free") return "free";        // green
+  if (s === "practice") return "practice"; // green
+  if (s === "game") return "game";        // blue
+
+  return "admin";                         // red
 }
+
 
 
 
