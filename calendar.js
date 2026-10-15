@@ -158,7 +158,6 @@ function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
 // ---- BUILD TIME SLICES FOR A COMPLEX ----
 function buildComplexSlices(complexFields, dayData, FIELD_MAP) {
   const changePoints = new Set();
-
   const perFieldBlocks = {};
 
   complexFields.forEach(field => {
@@ -214,6 +213,27 @@ function buildComplexSlices(complexFields, dayData, FIELD_MAP) {
   return slices;
 }
 
+// ---- ASSIGN LANES FOR EVENTS IN A SLICE ----
+function assignEventLanes(slice) {
+  const events = slice.fields.filter(f => f.status !== "free");
+  const lanes = [];
+
+  events.forEach(ev => {
+    // simple lane assignment: next free lane
+    let laneIndex = lanes.length;
+    lanes.push(ev);
+    ev._lane = laneIndex;
+  });
+
+  const freeFields = slice.fields.filter(f => f.status === "free");
+
+  return {
+    events,
+    freeFields,
+    laneCount: lanes.length
+  };
+}
+
 // ---- GLOBAL STATE ----
 let currentDate = new Date();
 
@@ -251,17 +271,19 @@ function renderTimeline() {
 
   const START_HOUR = 8;
   const END_HOUR = 21;
-  const PIXELS_PER_MIN = 1;
+  const PIXELS_PER_MIN = 2; // more vertical space
 
+  // Time ruler
   for (let h = START_HOUR; h <= END_HOUR; h++) {
     const top = (h - START_HOUR) * 60 * PIXELS_PER_MIN;
     const label = document.createElement("div");
-    label.style.position = "absolute";
+    label.className = "time-label";
     label.style.top = `${top}px`;
     label.textContent = to12h(`${String(h).padStart(2, "0")}:00`);
     timeCol.appendChild(label);
   }
 
+  // Legend
   const legend = document.createElement("div");
   legend.className = "timeline-legend";
   legend.innerHTML = `
@@ -270,6 +292,7 @@ function renderTimeline() {
   `;
   complexCol.appendChild(legend);
 
+  // Group fields by complex/location
   const complexes = {};
   fields.forEach(f => {
     const loc = f.location || "Unknown";
@@ -287,7 +310,6 @@ function renderTimeline() {
 
     const complexRow = document.createElement("div");
     complexRow.className = "complex-row";
-    complexRow.style.position = "relative";
     complexRow.style.height = `${(END_HOUR - START_HOUR) * 60 * PIXELS_PER_MIN}px`;
     complexContainer.appendChild(complexRow);
 
@@ -297,43 +319,50 @@ function renderTimeline() {
       const startMin = timeToMinutes(slice.start) - START_HOUR * 60;
       const endMin = timeToMinutes(slice.end) - START_HOUR * 60;
 
-      const reservedFields = slice.fields.filter(f => f.status !== "free");
-      const freeFields = slice.fields.filter(f => f.status === "free");
+      const { events, freeFields, laneCount } = assignEventLanes(slice);
 
-      if (reservedFields.length === 0 && freeFields.length === 0) return;
+      const totalLanes = laneCount + (freeFields.length > 0 ? 1 : 0);
+      if (totalLanes === 0) return;
 
-      const blockDiv = document.createElement("div");
-      blockDiv.className = "timeline-block";
-      blockDiv.style.position = "absolute";
-      blockDiv.style.left = "0px";
-      blockDiv.style.right = "0px";
-      blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
-      blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
+      const laneWidthPercent = 100 / totalLanes;
 
-      let html = "";
+      // Event lanes
+      events.forEach(ev => {
+        const blockDiv = document.createElement("div");
+        blockDiv.className = "timeline-block timeline-block-reserved";
 
-      if (reservedFields.length > 0) {
-        reservedFields.forEach(f => {
-          const label = f.title || f.status.toUpperCase();
-          html += `${to12h(slice.start)} – ${to12h(slice.end)} ${label} — ${f.label}<br>`;
-        });
-      }
+        blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
+        blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
+        blockDiv.style.left = `${ev._lane * laneWidthPercent}%`;
+        blockDiv.style.width = `${laneWidthPercent}%`;
 
+        const label = ev.title || ev.status.toUpperCase();
+        blockDiv.innerHTML = `
+          ${to12h(slice.start)} – ${to12h(slice.end)}<br>
+          ${label} — ${ev.label}
+        `;
+
+        complexRow.appendChild(blockDiv);
+      });
+
+      // Availability lane (merged)
       if (freeFields.length > 0) {
+        const blockDiv = document.createElement("div");
+        blockDiv.className = "timeline-block timeline-block-free";
+
+        blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
+        blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
+        blockDiv.style.left = `${laneCount * laneWidthPercent}%`;
+        blockDiv.style.width = `${laneWidthPercent}%`;
+
         const freeLabels = freeFields.map(f => f.label).join(", ");
-        html += `<strong>Available:</strong> ${freeLabels}<br>`;
+        blockDiv.innerHTML = `
+          <strong>Available:</strong><br>
+          ${freeLabels}
+        `;
+
+        complexRow.appendChild(blockDiv);
       }
-
-      const hasReserved = reservedFields.length > 0;
-      blockDiv.style.background = hasReserved ? "#ffe5b4" : "#8fd18f";
-      blockDiv.style.border = "1px solid #999";
-      blockDiv.style.borderRadius = "6px";
-      blockDiv.style.fontSize = "12px";
-      blockDiv.style.padding = "4px 8px";
-
-      blockDiv.innerHTML = html;
-
-      complexRow.appendChild(blockDiv);
     });
 
     complexCol.appendChild(complexContainer);
