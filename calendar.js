@@ -102,12 +102,11 @@ function mergeSameTimeBlocks(blocks) {
   return merged;
 }
 
-// ---- BUILD STITCHED BLOCKS FOR A FIELD ----
+// ---- BUILD BLOCKS FOR A FIELD (FREE + EVENTS, MERGED + SORTED) ----
 function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
   const type = FIELD_MAP[fieldId].type;
   let blocks = [];
 
-  // FULL FIELD → FREE WINDOWS
   if (type === "full") {
     const fullAvail = dayData.availability[fieldId] || [];
 
@@ -136,7 +135,6 @@ function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
     }));
   }
 
-  // HALF FIELD → EVENTS
   if (type === "half") {
     const rawBlocks = (dayData.merged || []).filter(b => b.field === fieldId);
 
@@ -151,13 +149,44 @@ function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
     }));
   }
 
-  // MERGE IDENTICAL TIME BLOCKS
   blocks = mergeSameTimeBlocks(blocks);
-
-  // SORT BY START TIME
   blocks.sort((a, b) => a.start.localeCompare(b.start));
 
   return blocks;
+}
+
+// ---- BUILD STITCHED COMPLEX ROWS (TIME-SLICED, ALL FIELDS TOGETHER) ----
+function buildComplexRows(complexFields, dayData, FIELD_MAP) {
+  const rowsByKey = {};
+
+  complexFields.forEach(field => {
+    const fid = field.id;
+    const blocks = buildFieldBlocks(fid, dayData, FIELD_MAP);
+
+    blocks.forEach(block => {
+      const key = `${block.start}-${block.end}`;
+      if (!rowsByKey[key]) {
+        rowsByKey[key] = {
+          start: block.start,
+          end: block.end,
+          items: []
+        };
+      }
+
+      rowsByKey[key].items.push({
+        fieldId: fid,
+        fieldLabel: `${FIELD_MAP[fid].surface}`,
+        type: block.type,
+        title: block.title,
+        start_12: block.start_12,
+        end_12: block.end_12
+      });
+    });
+  });
+
+  const rows = Object.values(rowsByKey);
+  rows.sort((a, b) => a.start.localeCompare(b.start));
+  return rows;
 }
 
 // ---- GLOBAL STATE ----
@@ -190,7 +219,7 @@ function renderTimeline() {
     FIELD_MAP[f.id] = {
       id: f.id,
       parent: f.name,
-      type: f.complex,
+      type: f.complex,      // "full" or "half"
       surface: f.surface,
       location: f.location || "Unknown"
     };
@@ -210,7 +239,7 @@ function renderTimeline() {
     timeCol.appendChild(label);
   }
 
-  // ---- Group fields by complex/location ----
+  // ---- Group fields by complex (using location) ----
   const complexes = {};
   fields.forEach(f => {
     const loc = f.location || "Unknown";
@@ -218,7 +247,7 @@ function renderTimeline() {
     complexes[loc].push(f);
   });
 
-  // ---- Render each complex ----
+  // ---- Render each complex as a single stitched timeline ----
   Object.keys(complexes).forEach(loc => {
     const complexContainer = document.createElement("div");
     complexContainer.className = "complex-column";
@@ -227,46 +256,60 @@ function renderTimeline() {
     complexHeader.textContent = loc;
     complexContainer.appendChild(complexHeader);
 
-    complexes[loc].forEach(field => {
-      const fid = field.id;
+    const complexRow = document.createElement("div");
+    complexRow.className = "complex-row";
+    complexRow.style.position = "relative";
+    complexRow.style.height = `${(END_HOUR - START_HOUR) * 60 * PIXELS_PER_MIN}px`;
+    complexContainer.appendChild(complexRow);
 
-      const row = document.createElement("div");
-      row.className = "field-row";
+    const rows = buildComplexRows(complexes[loc], dayData, FIELD_MAP);
 
-      const label = document.createElement("div");
-      label.className = "field-label";
-      label.textContent = `${field.surface} (${FIELD_MAP[fid].type})`;
-      row.appendChild(label);
+    rows.forEach(rowData => {
+      const blockDiv = document.createElement("div");
+      blockDiv.className = "timeline-block";
 
-      const blocks = buildFieldBlocks(fid, dayData, FIELD_MAP);
+      const startMin = timeToMinutes(rowData.start) - START_HOUR * 60;
+      const endMin = timeToMinutes(rowData.end) - START_HOUR * 60;
 
-      blocks.forEach(block => {
-        const div = document.createElement("div");
-        div.className = "timeline-block";
+      blockDiv.style.position = "absolute";
+      blockDiv.style.left = "0px";
+      blockDiv.style.right = "0px";
+      blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
+      blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
 
-        const color =
-          block.type === "free" ? "#d0e8ff" :
-          block.type === "practice" ? "#ffe5b4" :
-          "#f0f0f0";
+      const freeItems = rowData.items.filter(i => i.type === "free");
+      const reservedItems = rowData.items.filter(i => i.type !== "free");
 
-        div.style.background = color;
+      let html = "";
 
-        const startMin = timeToMinutes(block.start) - START_HOUR * 60;
-        const endMin = timeToMinutes(block.end) - START_HOUR * 60;
+      if (freeItems.length > 0) {
+        const freeFields = freeItems.map(i => i.fieldLabel).join(", ");
+        html += `<strong>Available:</strong> ${freeFields}<br>`;
+      }
 
-        div.style.top = `${startMin}px`;
-        div.style.height = `${endMin - startMin}px`;
-
-        div.innerHTML = `
-          <strong>${block.type.toUpperCase()}</strong><br>
-          ${block.start_12} – ${block.end_12}<br>
-          ${block.titles ? block.titles.join("<br>") : ""}
-        `;
-
-        row.appendChild(div);
+      reservedItems.forEach(item => {
+        const label = item.title ? item.title : item.type.toUpperCase();
+        html += `${item.start_12} – ${item.end_12} ${label} — ${item.fieldLabel}<br>`;
       });
 
-      complexContainer.appendChild(row);
+      // If only free, still show time + fields
+      if (reservedItems.length === 0 && freeItems.length > 0) {
+        const timeLabel = `${to12h(rowData.start)} – ${to12h(rowData.end)}`;
+        const freeFields = freeItems.map(i => i.fieldLabel).join(", ");
+        html = `${timeLabel} ${freeFields}`;
+      }
+
+      // Color: if any reserved, use reserved color; else free color
+      const hasReserved = reservedItems.length > 0;
+      blockDiv.style.background = hasReserved ? "#ffe5b4" : "#d0e8ff";
+      blockDiv.style.border = "1px solid #999";
+      blockDiv.style.borderRadius = "6px";
+      blockDiv.style.fontSize = "12px";
+      blockDiv.style.padding = "4px 8px";
+
+      blockDiv.innerHTML = html;
+
+      complexRow.appendChild(blockDiv);
     });
 
     complexCol.appendChild(complexContainer);
