@@ -1,10 +1,15 @@
-// calendar.js — full rewrite with location-only filters and cleaned layout
+// calendar.js — location-only filters, interwoven availability/events
 
 let SEARCH = null;
 let AVAIL = null;
 
 // Filters
 let FILTER_COMPLEX = "all";
+
+// Time constants
+const START_HOUR = 8;
+const END_HOUR = 21;
+const PIXELS_PER_MIN = 1;
 
 // ---- LOAD JSON ----
 async function loadSearchIndex() {
@@ -259,7 +264,7 @@ function assignEventLanes(slice) {
   const lanes = [];
 
   events.forEach(ev => {
-    let laneIndex = lanes.length;
+    const laneIndex = lanes.length;
     lanes.push(ev);
     ev._lane = laneIndex;
   });
@@ -347,10 +352,6 @@ function renderTimeline() {
     };
   });
 
-  const START_HOUR = 8;
-  const END_HOUR = 21;
-  const PIXELS_PER_MIN = 1;
-
   // Time ruler (every hour)
   for (let h = START_HOUR; h <= END_HOUR; h++) {
     const top = (h - START_HOUR) * 60 * PIXELS_PER_MIN;
@@ -383,7 +384,6 @@ function renderTimeline() {
     if (FILTER_COMPLEX !== "all" && FILTER_COMPLEX !== loc) return;
 
     const complexFields = complexes[loc];
-
     if (complexFields.length === 0) return;
 
     const complexContainer = document.createElement("div");
