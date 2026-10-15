@@ -5,22 +5,10 @@ let AVAIL = null;
 let FILTER_COMPLEX = "all";
 let FILTER_FIELDS = new Set();
 
-// Field → Complex map (built from events)
-let FIELD_COMPLEX_MAP = {};
-
-// Load JSON
+// ---- LOAD JSON ----
 async function loadSearchIndex() {
   const resp = await fetch("data/search_index.json");
   SEARCH = await resp.json();
-
-  // Build field → complex map
-  if (SEARCH && SEARCH.events) {
-    SEARCH.events.forEach(ev => {
-      if (!FIELD_COMPLEX_MAP[ev.field]) {
-        FIELD_COMPLEX_MAP[ev.field] = ev.field_group;
-      }
-    });
-  }
 }
 
 async function loadAvailability() {
@@ -58,6 +46,30 @@ function to12h(t) {
 function timeToMinutes(t) {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;
+}
+
+// ---- LOCATION HELPERS ----
+function capitalizeLocation(raw) {
+  if (!raw) return "Unknown";
+  return raw
+    .toLowerCase()
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function buildFieldComplexMapForDay(dayData) {
+  const map = {};
+  const eventsByField = dayData.events || {};
+
+  Object.keys(eventsByField).forEach(fieldId => {
+    eventsByField[fieldId].forEach(ev => {
+      if (ev.field_group) {
+        const loc = capitalizeLocation(ev.field_group);
+        map[fieldId] = loc;
+      }
+    });
+  });
+
+  return map;
 }
 
 // ---- SUBTRACT HALF-FIELD USAGE ----
@@ -252,14 +264,14 @@ function assignEventLanes(slice) {
 let currentDate = new Date();
 
 // ---- FILTER BAR ----
-function renderFilters(fields) {
+function renderFilters(fields, FIELD_COMPLEX_MAP) {
   const filterDiv = document.getElementById("filter-bar");
   filterDiv.innerHTML = "";
 
   const complexes = [...new Set(fields.map(f => FIELD_COMPLEX_MAP[f.id] || "Unknown"))];
 
   const complexSelect = document.createElement("select");
-  complexSelect.innerHTML = `<option value="all">All Complexes</option>`;
+  complexSelect.innerHTML = `<option value="all">All Locations</option>`;
   complexes.forEach(c => {
     complexSelect.innerHTML += `<option value="${c}">${c}</option>`;
   });
@@ -307,7 +319,10 @@ function renderTimeline() {
   const dayData = AVAIL.days[dateKey];
   const fields = dayData.fields;
 
-  renderFilters(fields);
+  // Build per‑day field → location map from events
+  const FIELD_COMPLEX_MAP = buildFieldComplexMapForDay(dayData);
+
+  renderFilters(fields, FIELD_COMPLEX_MAP);
 
   const FIELD_MAP = {};
   fields.forEach(f => {
@@ -343,7 +358,7 @@ function renderTimeline() {
   `;
   complexCol.appendChild(legend);
 
-  // Group fields by complex
+  // Group fields by location (field_group)
   const complexes = {};
   fields.forEach(f => {
     const loc = FIELD_COMPLEX_MAP[f.id] || "Unknown";
