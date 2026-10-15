@@ -4,13 +4,11 @@ let AVAIL = null;
 async function loadSearchIndex() {
   const resp = await fetch("data/search_index.json");
   SEARCH = await resp.json();
-  console.warn("SEARCH:", SEARCH);
 }
 
 async function loadAvailability() {
   const resp = await fetch("data/availability.json");
   AVAIL = await resp.json();
-  console.warn("AVAIL:", AVAIL);
 }
 
 console.log("calendar.js LOADED");
@@ -104,11 +102,12 @@ function mergeSameTimeBlocks(blocks) {
   return merged;
 }
 
-// ---- BUILD BLOCKS FOR A FIELD (FREE + EVENTS, MERGED + SORTED) ----
+// ---- BUILD STITCHED BLOCKS FOR A FIELD ----
 function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
   const type = FIELD_MAP[fieldId].type;
   let blocks = [];
 
+  // FULL FIELD → FREE WINDOWS
   if (type === "full") {
     const fullAvail = dayData.availability[fieldId] || [];
 
@@ -137,8 +136,8 @@ function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
     }));
   }
 
+  // HALF FIELD → EVENTS
   if (type === "half") {
-    // FIXED: merged is an array, not an object
     const rawBlocks = (dayData.merged || []).filter(b => b.field === fieldId);
 
     blocks = rawBlocks.map(b => ({
@@ -152,12 +151,14 @@ function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
     }));
   }
 
+  // MERGE IDENTICAL TIME BLOCKS
   blocks = mergeSameTimeBlocks(blocks);
+
+  // SORT BY START TIME
   blocks.sort((a, b) => a.start.localeCompare(b.start));
 
   return blocks;
 }
-
 
 // ---- GLOBAL STATE ----
 let currentDate = new Date();
@@ -189,7 +190,7 @@ function renderTimeline() {
     FIELD_MAP[f.id] = {
       id: f.id,
       parent: f.name,
-      type: f.complex,      // "full" or "half"
+      type: f.complex,
       surface: f.surface,
       location: f.location || "Unknown"
     };
@@ -209,7 +210,7 @@ function renderTimeline() {
     timeCol.appendChild(label);
   }
 
-  // ---- Group fields by complex (using location) ----
+  // ---- Group fields by complex/location ----
   const complexes = {};
   fields.forEach(f => {
     const loc = f.location || "Unknown";
@@ -217,13 +218,10 @@ function renderTimeline() {
     complexes[loc].push(f);
   });
 
-  // ---- Render each complex as a column ----
+  // ---- Render each complex ----
   Object.keys(complexes).forEach(loc => {
     const complexContainer = document.createElement("div");
     complexContainer.className = "complex-column";
-    complexContainer.style.display = "inline-block";
-    complexContainer.style.verticalAlign = "top";
-    complexContainer.style.marginRight = "20px";
 
     const complexHeader = document.createElement("h3");
     complexHeader.textContent = loc;
@@ -234,10 +232,6 @@ function renderTimeline() {
 
       const row = document.createElement("div");
       row.className = "field-row";
-      row.style.position = "relative";
-      row.style.height = `${(END_HOUR - START_HOUR) * 60 * PIXELS_PER_MIN}px`;
-      row.style.borderBottom = "1px solid #ddd";
-      row.style.marginBottom = "20px";
 
       const label = document.createElement("div");
       label.className = "field-label";
@@ -249,9 +243,6 @@ function renderTimeline() {
       blocks.forEach(block => {
         const div = document.createElement("div");
         div.className = "timeline-block";
-        div.style.position = "absolute";
-        div.style.left = "0px";
-        div.style.right = "0px";
 
         const color =
           block.type === "free" ? "#d0e8ff" :
@@ -259,16 +250,12 @@ function renderTimeline() {
           "#f0f0f0";
 
         div.style.background = color;
-        div.style.border = "1px solid #999";
-        div.style.borderRadius = "6px";
-        div.style.fontSize = "12px";
-        div.style.padding = "4px 8px";
 
         const startMin = timeToMinutes(block.start) - START_HOUR * 60;
         const endMin = timeToMinutes(block.end) - START_HOUR * 60;
 
-        div.style.top = `${startMin * PIXELS_PER_MIN}px`;
-        div.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
+        div.style.top = `${startMin}px`;
+        div.style.height = `${endMin - startMin}px`;
 
         div.innerHTML = `
           <strong>${block.type.toUpperCase()}</strong><br>
@@ -288,7 +275,6 @@ function renderTimeline() {
 
 // ---- INIT ----
 document.addEventListener("DOMContentLoaded", async () => {
-  console.log("DOMContentLoaded fired");
   await loadAvailability();
   await loadSearchIndex();
   render();
@@ -308,7 +294,6 @@ function render() {
       <span class="day-date">${humanDate}</span>
       <button id="nextDay">→</button>
     </div>
-    <p id="debugLine"></p>
     <div id="dayTimeline"></div>
   `;
 
