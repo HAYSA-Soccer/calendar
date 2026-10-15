@@ -1,11 +1,10 @@
-// calendar.js — full rewrite with location fixes, button filters, compact timeline
+// calendar.js — full rewrite with location-only filters and cleaned layout
 
 let SEARCH = null;
 let AVAIL = null;
 
 // Filters
 let FILTER_COMPLEX = "all";
-let FILTER_FIELDS = new Set();
 
 // ---- LOAD JSON ----
 async function loadSearchIndex() {
@@ -270,19 +269,18 @@ function assignEventLanes(slice) {
   return {
     events,
     freeFields,
-    laneCount: Math.max(lanes.length, 2) // ensure at least 2 lanes so single-field looks better
+    laneCount: lanes.length
   };
 }
 
 // ---- GLOBAL STATE ----
 let currentDate = new Date();
 
-// ---- FILTER BAR (BUTTONS) ----
+// ---- FILTER BAR (LOCATION BUTTONS ONLY) ----
 function renderFilters(fields, FIELD_COMPLEX_MAP) {
   const filterDiv = document.getElementById("filter-bar");
   filterDiv.innerHTML = "";
 
-  // Unique locations only
   const locations = [...new Set(
     fields.map(f => FIELD_COMPLEX_MAP[f.id]).filter(Boolean)
   )];
@@ -290,7 +288,6 @@ function renderFilters(fields, FIELD_COMPLEX_MAP) {
   const locContainer = document.createElement("div");
   locContainer.className = "filter-button-group";
 
-  // ALL LOCATIONS button
   const allBtn = document.createElement("button");
   allBtn.textContent = "All Locations";
   allBtn.className = FILTER_COMPLEX === "all" ? "filter-btn active" : "filter-btn";
@@ -300,7 +297,6 @@ function renderFilters(fields, FIELD_COMPLEX_MAP) {
   };
   locContainer.appendChild(allBtn);
 
-  // One button per location
   locations.forEach(loc => {
     const btn = document.createElement("button");
     btn.textContent = loc;
@@ -336,7 +332,6 @@ function renderTimeline() {
   const dayData = AVAIL.days[dateKey];
   const fields = dayData.fields;
 
-  // Build per‑day field → location map from events + parent inheritance
   const FIELD_COMPLEX_MAP = buildFieldComplexMapForDay(dayData);
 
   renderFilters(fields, FIELD_COMPLEX_MAP);
@@ -354,9 +349,9 @@ function renderTimeline() {
 
   const START_HOUR = 8;
   const END_HOUR = 21;
-  const PIXELS_PER_MIN = 1; // compact vertical spacing
+  const PIXELS_PER_MIN = 1;
 
-  // Time ruler
+  // Time ruler (every hour)
   for (let h = START_HOUR; h <= END_HOUR; h++) {
     const top = (h - START_HOUR) * 60 * PIXELS_PER_MIN;
     const label = document.createElement("div");
@@ -379,18 +374,15 @@ function renderTimeline() {
   const complexes = {};
   fields.forEach(f => {
     const loc = FIELD_COMPLEX_MAP[f.id];
-    if (!loc) return; // Unknown removed
+    if (!loc) return;
     if (!complexes[loc]) complexes[loc] = [];
     complexes[loc].push(f);
   });
 
-
   Object.keys(complexes).forEach(loc => {
     if (FILTER_COMPLEX !== "all" && FILTER_COMPLEX !== loc) return;
 
-    const complexFields = complexes[loc].filter(f => {
-      return FILTER_FIELDS.size === 0 || FILTER_FIELDS.has(f.id);
-    });
+    const complexFields = complexes[loc];
 
     if (complexFields.length === 0) return;
 
@@ -414,12 +406,29 @@ function renderTimeline() {
 
       const { events, freeFields, laneCount } = assignEventLanes(slice);
 
-      const totalLanes = laneCount + (freeFields.length > 0 ? 1 : 0);
-      if (totalLanes === 0) return;
-
+      const totalLanes = laneCount || 1;
       const laneWidthPercent = 100 / totalLanes;
 
-      // Event lanes
+      // Availability as background (full width)
+      if (freeFields.length > 0) {
+        const blockDiv = document.createElement("div");
+        blockDiv.className = "timeline-block timeline-block-free";
+
+        blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
+        blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
+        blockDiv.style.left = `0`;
+        blockDiv.style.width = `100%`;
+
+        const freeLabels = freeFields.map(f => f.label).join(", ");
+        blockDiv.innerHTML = `
+          <strong>Available:</strong><br>
+          ${freeLabels}
+        `;
+
+        complexRow.appendChild(blockDiv);
+      }
+
+      // Event lanes on top
       events.forEach(ev => {
         const blockDiv = document.createElement("div");
         blockDiv.className = "timeline-block timeline-block-reserved";
@@ -437,25 +446,6 @@ function renderTimeline() {
 
         complexRow.appendChild(blockDiv);
       });
-
-      // Availability lane
-      if (freeFields.length > 0) {
-        const blockDiv = document.createElement("div");
-        blockDiv.className = "timeline-block timeline-block-free";
-
-        blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
-        blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
-        blockDiv.style.left = `${laneCount * laneWidthPercent}%`;
-        blockDiv.style.width = `${laneWidthPercent}%`;
-
-        const freeLabels = freeFields.map(f => f.label).join(", ");
-        blockDiv.innerHTML = `
-          <strong>Available:</strong><br>
-          ${freeLabels}
-        `;
-
-        complexRow.appendChild(blockDiv);
-      }
     });
 
     complexCol.appendChild(complexContainer);
