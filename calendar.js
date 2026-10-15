@@ -1,4 +1,4 @@
-// calendar.js — location-only filters, interwoven availability/events
+// calendar.js — location filters, interwoven availability + events
 
 let SEARCH = null;
 let AVAIL = null;
@@ -406,18 +406,20 @@ function renderTimeline() {
 
       const { events, freeFields, laneCount } = assignEventLanes(slice);
 
-      const totalLanes = laneCount || 1;
+      // availability gets its own lane
+      const hasAvailabilityLane = freeFields.length > 0;
+      const totalLanes = laneCount + (hasAvailabilityLane ? 1 : 0) || 1;
       const laneWidthPercent = 100 / totalLanes;
 
-      // Availability as background (full width)
-      if (freeFields.length > 0) {
+      // Availability lane
+      if (hasAvailabilityLane) {
         const blockDiv = document.createElement("div");
         blockDiv.className = "timeline-block timeline-block-free";
 
         blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
         blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
-        blockDiv.style.left = `0`;
-        blockDiv.style.width = `100%`;
+        blockDiv.style.left = `${laneCount * laneWidthPercent}%`;
+        blockDiv.style.width = `${laneWidthPercent}%`;
 
         const freeLabels = freeFields.map(f => f.label).join(", ");
         blockDiv.innerHTML = `
@@ -428,7 +430,7 @@ function renderTimeline() {
         complexRow.appendChild(blockDiv);
       }
 
-      // Event lanes on top
+      // Event lanes
       events.forEach(ev => {
         const blockDiv = document.createElement("div");
         blockDiv.className = "timeline-block timeline-block-reserved";
