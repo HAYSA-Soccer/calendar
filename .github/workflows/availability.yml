@@ -27,7 +27,7 @@ jobs:
         run: |
           echo "🔎 Fetching season window..."
 
-          # Retry logic for Apps Script cold starts
+          # Retry logic (Apps Script sometimes cold-starts)
           for i in {1..5}; do
             RAW=$(curl -sSL "$WEBAPP_URL?mode=season_window") && break
             echo "Retry $i..."
@@ -47,10 +47,6 @@ jobs:
 
           START=$(echo "$CLEAN" | jq -r '.season_start')
           END=$(echo "$CLEAN" | jq -r '.season_end')
-
-          # ⭐ Normalize dates to YYYY-MM-DD
-          START=$(date -d "$START" +%Y-%m-%d)
-          END=$(date -d "$END" +%Y-%m-%d)
 
           echo "📅 Season start: $START"
           echo "📅 Season end:   $END"
@@ -126,7 +122,6 @@ jobs:
             echo "$DAY_SEARCH" > "data/tmp_search/${CURRENT}.json"
             echo "🔍 Saved search JSON → data/tmp_search/${CURRENT}.json"
 
-            # ⭐ Always increment in YYYY-MM-DD format
             CURRENT=$(date -d "$CURRENT + 1 day" +%Y-%m-%d)
           done
 
