@@ -139,9 +139,16 @@ function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
 
   if (type === "half") {
     const mergedByField = dayData.merged || {};
-    blocks = (mergedByField[fieldId] || []).map(b => ({
-      ...b,
-      field: fieldId
+    const rawBlocks = mergedByField[fieldId] || [];
+
+    blocks = rawBlocks.map(b => ({
+      field: fieldId,
+      type: b.type,
+      start: b.start,
+      end: b.end,
+      start_12: b.start_12,
+      end_12: b.end_12,
+      title: b.title || null
     }));
   }
 
@@ -160,7 +167,6 @@ function renderTimeline() {
   const dateKey = formatDateKey(currentDate);
 
   tl.innerHTML = `
-    <p>Timeline for ${formatHumanDate(dateKey)}</p>
     <div class="timeline-times"></div>
     <div class="timeline-complexes"></div>
   `;
@@ -175,7 +181,6 @@ function renderTimeline() {
 
   const dayData = AVAIL.days[dateKey];
   const fields = dayData.fields;
-  const complexesMeta = dayData.complexes || { full: [], half: [] };
 
   // ---- Build FIELD_MAP ----
   const FIELD_MAP = {};
@@ -304,7 +309,7 @@ function render() {
     </div>
     <p id="debugLine"></p>
     <div id="dayTimeline"></div>
- `;
+  `;
 
   document.getElementById("prevDay").onclick = () => {
     currentDate.setDate(currentDate.getDate() - 1);
