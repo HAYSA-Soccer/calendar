@@ -78,6 +78,7 @@ function subtractUsage(fullWindows, halfUsage) {
 let currentDate = new Date();
 
 // ---- TIMELINE RENDER ----
+// ---- TIMELINE RENDER ----
 function renderTimeline() {
   const tl = document.getElementById("dayTimeline");
   const dateKey = formatDateKey(currentDate);
@@ -95,7 +96,7 @@ function renderTimeline() {
   const fields = dayData.fields;
   const merged = dayData.merged || [];
 
-  // ---- Build FIELD_MAP from JSON ----
+  // Build FIELD_MAP from JSON
   const FIELD_MAP = {};
   fields.forEach(f => {
     FIELD_MAP[f.id] = {
@@ -107,22 +108,21 @@ function renderTimeline() {
     };
   });
 
-  // ---- Group merged blocks by field ----
+  // Group merged blocks by field
   const byField = {};
   merged.forEach(block => {
     if (!byField[block.field]) byField[block.field] = [];
     byField[block.field].push(block);
   });
 
-  // ---- Sort blocks by start time ----
+  // Sort blocks by start time
   Object.keys(byField).forEach(fid => {
     byField[fid].sort((a, b) => a.start.localeCompare(b.start));
   });
 
-  // ---- Render each field ----
+  // Render each field
   fields.forEach(field => {
     const fid = field.id;
-    const parent = FIELD_MAP[fid].parent;
     const type = FIELD_MAP[fid].type;
 
     tl.innerHTML += `
@@ -139,7 +139,7 @@ function renderTimeline() {
       </div>
     `;
 
-    // ---- FULL FIELD LOGIC ----
+    // FULL FIELD LOGIC — USE parent_field
     if (type === "full") {
       const fullAvail = dayData.availability[fid] || [];
 
@@ -155,7 +155,6 @@ function renderTimeline() {
         });
       });
 
-      // Compute true availability
       const trueAvail = subtractUsage(fullAvail, halfUsage);
 
       trueAvail.forEach(win => {
@@ -174,7 +173,7 @@ function renderTimeline() {
       });
     }
 
-    // ---- HALF FIELD LOGIC ----
+    // HALF FIELD LOGIC — USE merged[]
     if (type === "half") {
       const blocks = byField[fid] || [];
 
@@ -202,6 +201,7 @@ function renderTimeline() {
     }
   });
 }
+
 
 // ---- INIT ----
 document.addEventListener("DOMContentLoaded", async () => {
