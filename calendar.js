@@ -442,28 +442,31 @@ function renderTimeline() {
         complexRow.appendChild(blockDiv);
       }
 
-      // Event lanes (green, blue, red)
+      // Event lanes (practice = green, game = blue, admin = red)
       events.forEach(ev => {
         const blockDiv = document.createElement("div");
-      
+
         const colorType = classifyColor(ev);
         blockDiv.className = `timeline-block timeline-${colorType}`;
-      
+
         blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
         blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
         blockDiv.style.left = `${ev._lane * laneWidthPercent}%`;
         blockDiv.style.width = `${laneWidthPercent}%`;
-      
+
         const label = ev.title || ev.status.toUpperCase();
         blockDiv.innerHTML = `
           ${to12h(slice.start)} – ${to12h(slice.end)}<br>
           ${label} — ${ev.label}
         `;
-      
+
         complexRow.appendChild(blockDiv);
       });
+    }); // END slices.forEach
 
-}
+    complexCol.appendChild(complexContainer);
+  }); // END Object.keys(complexes).forEach
+} // END renderTimeline
 
 
 // ---- INIT ----
