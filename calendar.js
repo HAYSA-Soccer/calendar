@@ -148,16 +148,13 @@ function mergeSameTimeBlocks(blocks) {
 }
 
 
-function classifyColor(status, title) {
-  if (status === "free") return "free"; // availability = green
-
-  const t = (title || "").toLowerCase();
-
-  if (t.includes("practice")) return "practice"; // green
-  if (t.includes("game") || t.includes("vs")) return "game"; // blue
-
-  return "admin"; // red
+function classifyColor(ev) {
+  if (ev.status === "free") return "free";     // availability = green
+  if (ev.type === "practice") return "practice"; // practice = green
+  if (ev.type === "game") return "game";       // game = blue
+  return "admin";                              // everything else = red
 }
+
 
 
 
@@ -448,27 +445,24 @@ function renderTimeline() {
       // Event lanes (green, blue, red)
       events.forEach(ev => {
         const blockDiv = document.createElement("div");
-
-        const colorType = classifyColor(ev.status, ev.title);
+      
+        const colorType = classifyColor(ev);
         blockDiv.className = `timeline-block timeline-${colorType}`;
-
+      
         blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
         blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
         blockDiv.style.left = `${ev._lane * laneWidthPercent}%`;
         blockDiv.style.width = `${laneWidthPercent}%`;
-
+      
         const label = ev.title || ev.status.toUpperCase();
         blockDiv.innerHTML = `
           ${to12h(slice.start)} – ${to12h(slice.end)}<br>
           ${label} — ${ev.label}
         `;
-
+      
         complexRow.appendChild(blockDiv);
       });
-    });
 
-    complexCol.appendChild(complexContainer);
-  });
 }
 
 
