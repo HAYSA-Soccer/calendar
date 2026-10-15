@@ -337,7 +337,7 @@ function renderTimeline() {
 
   const START_HOUR = 8;
   const END_HOUR = 21;
-  const PIXELS_PER_MIN = 2;
+  const PIXELS_PER_MIN = 1.2;
 
   // Time ruler
   for (let h = START_HOUR; h <= END_HOUR; h++) {
