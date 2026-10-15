@@ -5,10 +5,22 @@ let AVAIL = null;
 let FILTER_COMPLEX = "all";
 let FILTER_FIELDS = new Set();
 
+// Field → Complex map (built from events)
+let FIELD_COMPLEX_MAP = {};
+
 // Load JSON
 async function loadSearchIndex() {
   const resp = await fetch("data/search_index.json");
   SEARCH = await resp.json();
+
+  // Build field → complex map
+  if (SEARCH && SEARCH.events) {
+    SEARCH.events.forEach(ev => {
+      if (!FIELD_COMPLEX_MAP[ev.field]) {
+        FIELD_COMPLEX_MAP[ev.field] = ev.field_group;
+      }
+    });
+  }
 }
 
 async function loadAvailability() {
@@ -244,7 +256,7 @@ function renderFilters(fields) {
   const filterDiv = document.getElementById("filter-bar");
   filterDiv.innerHTML = "";
 
-  const complexes = [...new Set(fields.map(f => f.name))];
+  const complexes = [...new Set(fields.map(f => FIELD_COMPLEX_MAP[f.id] || "Unknown"))];
 
   const complexSelect = document.createElement("select");
   complexSelect.innerHTML = `<option value="all">All Complexes</option>`;
@@ -304,7 +316,7 @@ function renderTimeline() {
       parent: f.name,
       type: f.complex,
       surface: f.surface,
-      location: f.name // THIS IS THE FIX
+      location: FIELD_COMPLEX_MAP[f.id] || "Unknown"
     };
   });
 
@@ -331,10 +343,10 @@ function renderTimeline() {
   `;
   complexCol.appendChild(legend);
 
-  // Group fields by complex (using name)
+  // Group fields by complex
   const complexes = {};
   fields.forEach(f => {
-    const loc = f.name;
+    const loc = FIELD_COMPLEX_MAP[f.id] || "Unknown";
     if (!complexes[loc]) complexes[loc] = [];
     complexes[loc].push(f);
   });
