@@ -132,6 +132,54 @@ function buildFieldComplexMapForDay(dayData) {
   return map;
 }
 
+
+// ------------------------------------------------------------
+// BUILD DAY AVAILABILITY (SUPPORTS YOUR JSON FORMAT)
+// ------------------------------------------------------------
+function buildDayAvailability(dayData) {
+  const result = {};
+
+  // Your JSON uses: dayData.availability[fieldId] = [ {start, end}, ... ]
+  if (dayData.availability) {
+    Object.keys(dayData.availability).forEach(fieldId => {
+      const windows = dayData.availability[fieldId] || [];
+      result[fieldId] = windows.map(w => ({
+        field: fieldId,
+        start: w.start,
+        end: w.end,
+        type: "free",
+        title: ""
+      }));
+    });
+  }
+
+  // Your JSON uses: dayData.events[fieldId] = [ {start, end, type, title}, ... ]
+  if (dayData.events) {
+    Object.keys(dayData.events).forEach(fieldId => {
+      const events = dayData.events[fieldId] || [];
+      if (!result[fieldId]) result[fieldId] = [];
+
+      events.forEach(ev => {
+        result[fieldId].push({
+          field: fieldId,
+          start: ev.start,
+          end: ev.end,
+          type: ev.type || "event",
+          title: ev.title || "",
+          team: ev.team || "",
+          coach: ev.coach || "",
+          grade: ev.grade || "",
+          source: ev.source || ""
+        });
+      });
+    });
+  }
+
+  return result;
+}
+
+
+
 // ---- SUBTRACT HALF-FIELD USAGE FROM FULL-FIELD WINDOWS ----
 function subtractUsage(fullWindows, halfUsage) {
   const result = [];
