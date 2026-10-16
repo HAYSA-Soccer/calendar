@@ -98,28 +98,28 @@ function capitalizeLocation(raw) {
 // Build field → location map for a given day
 function buildFieldComplexMapForDay(dayData) {
   const map = {};
-  const eventsByField = dayData.events || {};
-
-  Object.keys(eventsByField).forEach(fieldId => {
-    eventsByField[fieldId].forEach(ev => {
-      if (ev.field_group) {
-        const loc = capitalizeLocation(ev.field_group);
-        if (loc) map[fieldId] = loc;
-      }
-    });
-  });
 
   dayData.fields.forEach(f => {
-    if (!map[f.id]) {
-      const parent = f.name;
-      if (map[parent]) {
-        map[f.id] = map[parent];
-      }
+    const surf = f.surface.toLowerCase();
+
+    if (surf.includes("turf")) {
+      map[f.id] = "Turf";
+    } else if (surf.includes("sumner")) {
+      map[f.id] = "Sumner";
+    } else if (surf.includes("sj")) {
+      map[f.id] = "Sean Joyce";
+    } else if (surf.includes("brookville")) {
+      map[f.id] = "Brookville";
+    } else if (surf.includes("butler")) {
+      map[f.id] = "Butler";
+    } else {
+      map[f.id] = "Other";
     }
   });
 
   return map;
 }
+
 
 // ---- SUBTRACT HALF-FIELD USAGE FROM FULL-FIELD AVAILABILITY ----
 function subtractUsage(fullWindows, halfUsage) {
