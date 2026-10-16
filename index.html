@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>HAYSA Calendar</title>
-  <link rel="stylesheet" href="calendar.css?v=3">
+  <link rel="stylesheet" href="calendar.css?v=4">
 </head>
 <body>
 
@@ -18,15 +18,25 @@
     </nav>
   </header>
 
-  <main id="view-container"></main>
+  <main class="main-container">
+    <div id="view-header" class="view-header">
+      <div class="controls">
+        <button id="prevPeriod" class="nav-btn">←</button>
+        <span id="periodLabel" class="period-label"></span>
+        <button id="nextPeriod" class="nav-btn">→</button>
+      </div>
+    </div>
 
-  <!-- Day timeline (vertical) -->
-  <div id="dayTimeline" class="timeline-container"></div>
+    <div id="filter-bar" class="filter-bar"></div>
 
-  <!-- Week timeline (horizontal, complexes side-by-side) -->
-  <div id="weekTimeline" class="timeline-container"></div>
+    <!-- Day timeline (vertical) -->
+    <div id="dayTimeline" class="timeline-container"></div>
 
-  <script src="calendar.js?v=3"></script>
+    <!-- Week timeline (horizontal, complexes side-by-side) -->
+    <div id="weekTimeline" class="timeline-container"></div>
+  </main>
+
+  <script src="calendar.js?v=4"></script>
 
 </body>
 </html>
