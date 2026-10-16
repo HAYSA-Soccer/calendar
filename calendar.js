@@ -459,24 +459,29 @@ function renderDayTimelineForDate(dateObj, container) {
       const totalLanes = laneCount + (hasAvailabilityLane ? 1 : 0);
       const laneWidthPercent = 100 / totalLanes;
 
-      // Availability lane (green)
+      // Availability lane (merged if identical)
       if (hasAvailabilityLane) {
+        const allSame = freeFields.every(f => f.label === freeFields[0].label);
+        const freeLabels = allSame
+          ? freeFields[0].label
+          : freeFields.map(f => f.label).join(", ");
+      
         const blockDiv = document.createElement("div");
         blockDiv.className = "timeline-block timeline-free";
-
+      
         blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
         blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
         blockDiv.style.left = `${laneCount * laneWidthPercent}%`;
         blockDiv.style.width = `${laneWidthPercent}%`;
-
-        const freeLabels = freeFields.map(f => f.label).join(", ");
+      
         blockDiv.innerHTML = `
           <strong>Available:</strong><br>
           ${freeLabels}
         `;
-
+      
         complexRow.appendChild(blockDiv);
       }
+
 
       // Event lanes (practice = green, game = blue, admin = red)
       events.forEach(ev => {
@@ -625,23 +630,29 @@ function renderWeekDayColumn(dateObj, container) {
       const totalLanes = laneCount + (hasAvailabilityLane ? 1 : 0);
       const laneWidthPercent = 100 / totalLanes;
 
-      // Availability lane
+      // Availability lane (merged if identical)
       if (hasAvailabilityLane) {
+        const allSame = freeFields.every(f => f.label === freeFields[0].label);
+        const freeLabels = allSame
+          ? freeFields[0].label
+          : freeFields.map(f => f.label).join(", ");
+      
         const blockDiv = document.createElement("div");
         blockDiv.className = "timeline-block timeline-free";
-
-        blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
-        blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
+      
+        blockDiv.style.top = `${startMin}px`;
+        blockDiv.style.height = `${endMin - startMin}px`;
         blockDiv.style.left = `${laneCount * laneWidthPercent}%`;
         blockDiv.style.width = `${laneWidthPercent}%`;
-
+      
         blockDiv.innerHTML = `
           <strong>Available:</strong><br>
-          ${freeFields.map(f => f.label).join(", ")}
+          ${freeLabels}
         `;
-
+      
         complexCol.appendChild(blockDiv);
       }
+
 
       // Events
       events.forEach(ev => {
