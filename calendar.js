@@ -1,4 +1,6 @@
-// calendar.js — v8 (multi-select filters + sunset + 2h grid)
+// ------------------------------------------------------------
+// calendar.js — FULL PATCHED VERSION
+// ------------------------------------------------------------
 
 // ---- GLOBAL STATE ----
 let SEARCH = null;
@@ -87,15 +89,8 @@ function timeToMinutes(t) {
   return h * 60 + m;
 }
 
-// ---- LOCATION HELPERS ----
-function capitalizeLocation(raw) {
-  if (!raw) return null;
-  return raw
-    .toLowerCase()
-    .replace(/\b\w/g, c => c.toUpperCase());
-}
-
-// Build field → location map for a given day
+// ---- COMPLEX MAPPING ----
+// Maps each field ID to one of your four complexes
 function buildFieldComplexMapForDay(dayData) {
   const map = {};
 
@@ -103,15 +98,13 @@ function buildFieldComplexMapForDay(dayData) {
     const surf = f.surface.toLowerCase();
 
     if (surf.includes("turf")) {
-      map[f.id] = "Turf";
-    } else if (surf.includes("sumner")) {
-      map[f.id] = "Sumner";
-    } else if (surf.includes("sj")) {
-      map[f.id] = "Sean Joyce";
+      map[f.id] = "Holbrook HS Turf";
+    } else if (surf.includes("sumner") || surf.includes("sj")) {
+      map[f.id] = "Sumner / Sean Joyce Fields";
     } else if (surf.includes("brookville")) {
-      map[f.id] = "Brookville";
+      map[f.id] = "Brookville Fields";
     } else if (surf.includes("butler")) {
-      map[f.id] = "Butler";
+      map[f.id] = "Avon Butler Fields";
     } else {
       map[f.id] = "Other";
     }
@@ -120,8 +113,7 @@ function buildFieldComplexMapForDay(dayData) {
   return map;
 }
 
-
-// ---- SUBTRACT HALF-FIELD USAGE FROM FULL-FIELD AVAILABILITY ----
+// ---- SUBTRACT HALF-FIELD USAGE FROM FULL-FIELD WINDOWS ----
 function subtractUsage(fullWindows, halfUsage) {
   const result = [];
 
@@ -153,7 +145,7 @@ function subtractUsage(fullWindows, halfUsage) {
   return result;
 }
 
-// ---- MERGE SAME-TIME BLOCKS PER FIELD ----
+// ---- MERGE SAME-TIME BLOCKS ----
 function mergeSameTimeBlocks(blocks) {
   const merged = [];
 
@@ -178,467 +170,379 @@ function mergeSameTimeBlocks(blocks) {
   return merged;
 }
 
-function classifyColor(ev) {
-  const s = ev.status;
-  if (s === "free") return "free";
-  if (s === "practice") return "practice";
-  if (s === "game") return "game";
-  return "admin";
-}
+// ---- BUILD BLOCKS FOR A SINGLE FIELD ----
+function buildFieldBlocks(field, dayData) {
+  const blocks = [];
 
-// ---- MERGE ADJACENT SLICES WITH IDENTICAL FIELD STATES ----
-function mergeSlices(slices) {
-  const merged = [];
-  let current = null;
-
-  slices.forEach(slice => {
-    if (!current) {
-      current = { ...slice };
-      return;
-    }
-
-    const same =
-      JSON.stringify(slice.fields) === JSON.stringify(current.fields);
-
-    if (same) {
-      current.end = slice.end;
-    } else {
-      merged.push(current);
-      current = { ...slice };
-    }
+  // Free windows
+  field.free.forEach(win => {
+    blocks.push({
+      start: win.start,
+      end: win.end,
+      type: "free",
+      title: null
+    });
   });
 
-  if (current) merged.push(current);
-
-  return merged;
-}
-
-// ---- BUILD BLOCKS FOR A FIELD ----
-function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
-  const type = FIELD_MAP[fieldId].type;
-  let blocks = [];
-
-  if (type === "full") {
-    let fullAvail = dayData.availability[fieldId] || [];
-
-    const halfFields = dayData.fields.filter(f =>
-      f.parent === fieldId && f.complex === "half"
-    );
-
-    const halfUsage = [];
-    halfFields.forEach(h => {
-      const events = dayData.events[h.id] || [];
-      events.forEach(ev => {
-        halfUsage.push({ start: ev.start, end: ev.end });
-      });
+  // Practice
+  field.practice.forEach(p => {
+    blocks.push({
+      start: p.start,
+      end: p.end,
+      type: "practice",
+      title: p.team
     });
+  });
 
-    if (fullAvail.length === 0) {
-      const startStr = `${String(START_HOUR).padStart(2, "0")}:00`;
-      const endStr = `${String(END_HOUR).padStart(2, "0")}:00`;
-      fullAvail = [{ start: startStr, end: endStr }];
-      const trueAvail = fullAvail;
+  // Games
+  field.games.forEach(g => {
+    blocks.push({
+      start: g.start,
+      end: g.end,
+      type: "game",
+      title: `${g.home} vs ${g.away}`
+    });
+  });
 
-      blocks = trueAvail.map(win => ({
-        field: fieldId,
-        type: "free",
-        start: win.start,
-        end: win.end,
-        start_12: to12h(win.start),
-        end_12: to12h(win.end),
-        title: null
-      }));
-    } else {
-      const trueAvail = subtractUsage(fullAvail, halfUsage);
+  // Admin
+  field.admin.forEach(a => {
+    blocks.push({
+      start: a.start,
+      end: a.end,
+      type: "admin",
+      title: a.reason
+    });
+  });
 
-      blocks = trueAvail.map(win => ({
-        field: fieldId,
-        type: "free",
-        start: win.start,
-        end: win.end,
-        start_12: to12h(win.start),
-        end_12: to12h(win.end),
-        title: null
-      }));
-    }
-  }
-
-  if (type === "half") {
-    const rawBlocks = (dayData.merged || []).filter(b => b.field === fieldId);
-
-    blocks = rawBlocks.map(b => ({
-      field: fieldId,
-      type: b.type,
-      start: b.start,
-      end: b.end,
-      start_12: b.start_12,
-      end_12: b.end_12,
-      title: b.title || null
-    }));
-  }
-
-  blocks = mergeSameTimeBlocks(blocks);
-  blocks.sort((a, b) => a.start.localeCompare(b.start));
-
-  return blocks;
+  return mergeSameTimeBlocks(blocks);
 }
 
-// ---- BUILD TIME SLICES FOR A COMPLEX ----
-function buildComplexSlices(complexFields, dayData, FIELD_MAP) {
-  const changePoints = new Set();
-  const perFieldBlocks = {};
+// ---- BUILD COMPLEX → BLOCKS MAP ----
+function buildComplexBlocks(dayData) {
+  const complexMap = buildFieldComplexMapForDay(dayData);
+  const result = {};
 
-  complexFields.forEach(field => {
-    const fid = field.id;
-    const blocks = buildFieldBlocks(fid, dayData, FIELD_MAP);
-    perFieldBlocks[fid] = blocks;
+  Object.values(complexMap).forEach(c => {
+    result[c] = [];
+  });
+
+  dayData.fields.forEach(field => {
+    const complex = complexMap[field.id];
+    const blocks = buildFieldBlocks(field, dayData);
 
     blocks.forEach(b => {
-      changePoints.add(b.start);
-      changePoints.add(b.end);
-    });
-  });
-
-  const points = Array.from(changePoints).sort((a, b) => a.localeCompare(b));
-
-  const slices = [];
-
-  for (let i = 0; i < points.length - 1; i++) {
-    const start = points[i];
-    const end = points[i + 1];
-
-    const slice = {
-      start,
-      end,
-      fields: []
-    };
-
-    complexFields.forEach(field => {
-      const fid = field.id;
-      const blocks = perFieldBlocks[fid];
-
-      let status = "free";
-      let title = null;
-
-      blocks.forEach(b => {
-        if (b.start <= start && b.end >= end && b.type !== "free") {
-          status = b.type;
-          title = (b.titles && b.titles.length) ? b.titles.join(", ") : b.title;
-        }
-      });
-
-      slice.fields.push({
-        id: fid,
-        label: FIELD_MAP[fid].surface,
-        status,
-        title
+      result[complex].push({
+        ...b,
+        fieldId: field.id,
+        fieldName: field.name
       });
     });
-
-    slices.push(slice);
-  }
-
-  return mergeSlices(slices);
-}
-
-// ---- ASSIGN LANES ----
-function assignEventLanes(slice) {
-  const events = slice.fields.filter(f => f.status !== "free");
-  const lanes = [];
-
-  events.forEach(ev => {
-    const laneIndex = lanes.length;
-    lanes.push(ev);
-    ev._lane = laneIndex;
   });
 
-  const freeFields = slice.fields.filter(f => f.status === "free");
-
-  return {
-    events,
-    freeFields,
-    laneCount: lanes.length
-  };
+  return result;
 }
 
-// ---- FILTER BAR (multi-select) ----
-function renderFilters(fields, FIELD_COMPLEX_MAP) {
-  const filterDiv = document.getElementById("filter-bar");
-  filterDiv.innerHTML = "";
+// ---- BUILD DAY VIEW ----
+function renderDayView(dateKey) {
+  const container = document.getElementById("view-container");
+  container.innerHTML = "";
 
-  const locations = [...new Set(
-    fields.map(f => FIELD_COMPLEX_MAP[f.id]).filter(Boolean)
-  )];
-
-  // Initialize filter set if empty: all selected
-  if (FILTER_COMPLEXES.size === 0) {
-    locations.forEach(loc => FILTER_COMPLEXES.add(loc));
-  }
-
-  const locContainer = document.createElement("div");
-  locContainer.className = "filter-button-group";
-
-  locations.forEach(loc => {
-    const btn = document.createElement("button");
-    btn.textContent = loc;
-    const isActive = FILTER_COMPLEXES.has(loc);
-    btn.className = isActive ? "filter-btn active" : "filter-btn";
-    btn.onclick = () => {
-      if (FILTER_COMPLEXES.has(loc)) {
-        FILTER_COMPLEXES.delete(loc);
-      } else {
-        FILTER_COMPLEXES.add(loc);
-      }
-      // If user deselects everything, reselect all to avoid empty screen
-      if (FILTER_COMPLEXES.size === 0) {
-        locations.forEach(l => FILTER_COMPLEXES.add(l));
-      }
-      render();
-    };
-    locContainer.appendChild(btn);
-  });
-
-  filterDiv.appendChild(locContainer);
-}
-
-// ---- GRID LINES + SUNSET (shared) ----
-function renderTimeGridLines(container) {
-  const totalMinutes = (END_HOUR - START_HOUR) * 60;
-  for (let m = 0; m <= totalMinutes; m += GRID_INTERVAL_MIN) {
-    const top = m * PIXELS_PER_MIN;
-    const line = document.createElement("div");
-    line.className = "time-grid-line";
-    line.style.top = `${top}px`;
-    container.appendChild(line);
-  }
-}
-
-function renderSunsetLine(container, dayData) {
-  if (!dayData || !dayData.sunset) return;
-  const sunsetMin = timeToMinutes(dayData.sunset) - START_HOUR * 60;
-  if (sunsetMin < 0 || sunsetMin > (END_HOUR - START_HOUR) * 60) return;
-
-  const top = sunsetMin * PIXELS_PER_MIN;
-  const line = document.createElement("div");
-  line.className = "sunset-line";
-  line.style.top = `${top}px`;
-
-  const label = document.createElement("div");
-  label.className = "sunset-label";
-  label.textContent = `Sunset ${to12h(dayData.sunset)}`;
-
-  line.appendChild(label);
-  container.appendChild(line);
-}
-
-// ---- DAY VIEW: SINGLE DATE, COMPLEXES SIDE-BY-SIDE ----
-function renderDayTimelineForDate(dateObj, container) {
-  const dateKey = formatDateKey(dateObj);
-
-  container.innerHTML = `
-    <div class="timeline-times"></div>
-    <div class="day-complexes"></div>
-  `;
-
-  const timeCol = container.querySelector(".timeline-times");
-  const complexWrapper = container.querySelector(".day-complexes");
-
-  if (!AVAIL || !AVAIL.days || !AVAIL.days[dateKey]) {
-    complexWrapper.innerHTML = `<p class="no-data">No availability for this date.</p>`;
+  const dayData = AVAIL[dateKey];
+  if (!dayData) {
+    container.innerHTML = `<div class="no-data">No data for ${dateKey}</div>`;
     return;
   }
 
-  const dayData = AVAIL.days[dateKey];
-  const fields = dayData.fields;
+  const complexBlocks = buildComplexBlocks(dayData);
 
-  const FIELD_COMPLEX_MAP = buildFieldComplexMapForDay(dayData);
+  // ---- HEADER ----
+  const header = document.createElement("div");
+  header.className = "view-header";
 
-  renderFilters(fields, FIELD_COMPLEX_MAP);
+  const modeToggle = document.createElement("div");
+  modeToggle.className = "view-mode-toggle";
 
-  const FIELD_MAP = {};
-  fields.forEach(f => {
-    FIELD_MAP[f.id] = {
-      id: f.id,
-      parent: f.name,
-      type: f.complex,
-      surface: f.surface,
-      location: FIELD_COMPLEX_MAP[f.id] || null
+  ["day", "week", "month", "search"].forEach(mode => {
+    const btn = document.createElement("button");
+    btn.className = "mode-btn" + (VIEW_MODE === mode ? " active" : "");
+    btn.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+    btn.onclick = () => {
+      VIEW_MODE = mode;
+      renderCurrentView();
     };
+    modeToggle.appendChild(btn);
   });
 
-  // Time labels
+  const controls = document.createElement("div");
+  controls.className = "controls";
+
+  const prevBtn = document.createElement("button");
+  prevBtn.className = "nav-btn";
+  prevBtn.textContent = "<";
+  prevBtn.onclick = () => {
+    currentDate.setDate(currentDate.getDate() - 1);
+    renderCurrentView();
+  };
+
+  const nextBtn = document.createElement("button");
+  nextBtn.className = "nav-btn";
+  nextBtn.textContent = ">";
+  nextBtn.onclick = () => {
+    currentDate.setDate(currentDate.getDate() + 1);
+    renderCurrentView();
+  };
+
+  const label = document.createElement("div");
+  label.className = "period-label";
+  label.textContent = formatHumanDate(dateKey);
+
+  controls.appendChild(prevBtn);
+  controls.appendChild(label);
+  controls.appendChild(nextBtn);
+
+  header.appendChild(modeToggle);
+  header.appendChild(controls);
+
+  container.appendChild(header);
+
+  // ---- FILTER BAR ----
+  const filterBar = document.createElement("div");
+  filterBar.className = "filter-bar";
+
+  const filterGroup = document.createElement("div");
+  filterGroup.className = "filter-button-group";
+
+  const complexes = Object.keys(complexBlocks);
+
+  complexes.forEach(c => {
+    const btn = document.createElement("button");
+    btn.className = "filter-btn" + (FILTER_COMPLEXES.has(c) ? " active" : "");
+    btn.textContent = c;
+
+    btn.onclick = () => {
+      if (FILTER_COMPLEXES.has(c)) {
+        FILTER_COMPLEXES.delete(c);
+      } else {
+        FILTER_COMPLEXES.add(c);
+      }
+      renderCurrentView();
+    };
+
+    filterGroup.appendChild(btn);
+  });
+
+  filterBar.appendChild(filterGroup);
+  container.appendChild(filterBar);
+
+  // ---- TIMELINE ----
+  const timeline = document.createElement("div");
+  timeline.id = "dayTimeline";
+
+  // Left time labels
+  const times = document.createElement("div");
+  times.className = "timeline-times";
+
   for (let h = START_HOUR; h <= END_HOUR; h++) {
-    const top = (h - START_HOUR) * 60 * PIXELS_PER_MIN;
-    const label = document.createElement("div");
-    label.className = "time-label";
-    label.style.top = `${top}px`;
-    label.textContent = to12h(`${String(h).padStart(2, "0")}:00`);
-    timeCol.appendChild(label);
+    const y = (h - START_HOUR) * 60 * PIXELS_PER_MIN;
+    const lbl = document.createElement("div");
+    lbl.className = "time-label";
+    lbl.style.top = `${y - 6}px`;
+    lbl.textContent = `${h}:00`;
+    times.appendChild(lbl);
+
+    const line = document.createElement("div");
+    line.className = "time-grid-line";
+    line.style.top = `${y}px`;
+    times.appendChild(line);
   }
 
-  // Grid lines + sunset
-  renderTimeGridLines(complexWrapper);
-  renderSunsetLine(complexWrapper, dayData);
+  timeline.appendChild(times);
 
-  const legend = document.createElement("div");
-  legend.className = "timeline-legend";
-  legend.innerHTML = `
-    <span class="legend-item legend-free">Availability</span>
-    <span class="legend-item legend-practice">Practice</span>
-    <span class="legend-item legend-game">Game</span>
-    <span class="legend-item legend-admin">Admin</span>
-  `;
-  complexWrapper.appendChild(legend);
+  // ---- COMPLEX COLUMNS ----
+  const complexContainer = document.createElement("div");
+  complexContainer.className = "day-complexes";
 
-  const complexes = {};
-  fields.forEach(f => {
-    const loc = FIELD_COMPLEX_MAP[f.id];
-    if (!loc) return;
-    if (!complexes[loc]) complexes[loc] = [];
-    complexes[loc].push(f);
-  });
+  complexes.forEach(complex => {
+    if (FILTER_COMPLEXES.size > 0 && !FILTER_COMPLEXES.has(complex)) return;
 
-  const complexRowContainer = document.createElement("div");
-  complexRowContainer.style.display = "flex";
-  complexRowContainer.style.flexDirection = "row";
-  complexRowContainer.style.gap = "12px";
-  complexRowContainer.style.width = "100%";
-  complexRowContainer.style.position = "relative";
-  complexRowContainer.style.marginTop = "4px";
-  complexWrapper.appendChild(complexRowContainer);
+    const col = document.createElement("div");
+    col.className = "complex-column";
 
-  Object.keys(complexes).forEach(loc => {
-    if (!FILTER_COMPLEXES.has(loc)) return;
+    const h3 = document.createElement("h3");
+    h3.textContent = complex;
+    col.appendChild(h3);
 
-    const complexFields = complexes[loc];
-    if (complexFields.length === 0) return;
+    const row = document.createElement("div");
+    row.className = "complex-row";
 
-    const complexContainer = document.createElement("div");
-    complexContainer.className = "complex-column";
+    // Sunset line
+    const sunsetMin = timeToMinutes(dayData.sunset);
+    const sunsetY = (sunsetMin - START_HOUR * 60) * PIXELS_PER_MIN;
 
-    const complexHeader = document.createElement("h3");
-    complexHeader.textContent = loc;
+    const sunsetLine = document.createElement("div");
+    sunsetLine.className = "sunset-line";
+    sunsetLine.style.top = `${sunsetY}px`;
 
-    const toggleBtn = document.createElement("button");
-    toggleBtn.textContent = "▼";
-    toggleBtn.className = "complex-toggle";
-    toggleBtn.onclick = () => {
-      complexRow.style.display =
-        complexRow.style.display === "none" ? "block" : "none";
-    };
-    complexHeader.appendChild(toggleBtn);
+    const sunsetLabel = document.createElement("div");
+    sunsetLabel.className = "sunset-label";
+    sunsetLabel.textContent = `Sunset ${to12h(dayData.sunset)}`;
 
-    complexContainer.appendChild(complexHeader);
+    sunsetLine.appendChild(sunsetLabel);
+    row.appendChild(sunsetLine);
 
-    const complexRow = document.createElement("div");
-    complexRow.className = "complex-row";
-    complexRow.style.height = `${(END_HOUR - START_HOUR) * 60 * PIXELS_PER_MIN}px`;
-    complexContainer.appendChild(complexRow);
+    // Blocks
+    complexBlocks[complex].forEach(b => {
+      const startMin = timeToMinutes(b.start);
+      const endMin = timeToMinutes(b.end);
 
-    const slices = buildComplexSlices(complexFields, dayData, FIELD_MAP);
+      const top = (startMin - START_HOUR * 60) * PIXELS_PER_MIN;
+      const height = (endMin - startMin) * PIXELS_PER_MIN;
 
-    // Skip empty complexes
-    if (slices.length === 0) return;
+      const div = document.createElement("div");
+      div.className = `timeline-block timeline-${b.type}`;
+      div.style.top = `${top}px`;
+      div.style.height = `${height}px`;
 
-    slices.forEach(slice => {
-      const startMin = timeToMinutes(slice.start) - START_HOUR * 60;
-      const endMin = timeToMinutes(slice.end) - START_HOUR * 60;
+      const time = document.createElement("div");
+      time.className = "block-time";
+      time.textContent = `${to12h(b.start)} - ${to12h(b.end)}`;
 
-      const { events, freeFields, laneCount } = assignEventLanes(slice);
+      const main = document.createElement("div");
+      main.className = "block-main";
+      main.textContent = b.titles && b.titles.length > 0
+        ? b.titles.join(", ")
+        : b.fieldName;
 
-      const hasAvailabilityLane = freeFields.length > 0;
-      const totalLanes = laneCount + (hasAvailabilityLane ? 1 : 0);
-      const laneWidthPercent = 100 / totalLanes;
+      div.appendChild(time);
+      div.appendChild(main);
 
-      if (hasAvailabilityLane) {
-        const allSame = freeFields.every(f => f.label === freeFields[0].label);
-        const freeLabels = allSame
-          ? freeFields[0].label
-          : freeFields.map(f => f.label).join(", ");
-
-        const blockDiv = document.createElement("div");
-        blockDiv.className = "timeline-block timeline-free";
-
-        blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
-        blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
-        blockDiv.style.left = `${laneCount * laneWidthPercent}%`;
-        blockDiv.style.width = `${laneWidthPercent}%`;
-
-        blockDiv.innerHTML = `
-          <div class="block-time">${to12h(slice.start)} – ${to12h(slice.end)}</div>
-          <div class="block-main">Available</div>
-        `;
-        blockDiv.title = `Available: ${freeLabels}`;
-
-        complexRow.appendChild(blockDiv);
-      }
-
-      events.forEach(ev => {
-        const blockDiv = document.createElement("div");
-        const colorType = classifyColor(ev);
-        blockDiv.className = `timeline-block timeline-${colorType}`;
-
-        blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
-        blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
-        blockDiv.style.left = `${ev._lane * laneWidthPercent}%`;
-        blockDiv.style.width = `${laneWidthPercent}%`;
-
-        const labelFull = ev.title || ev.status.toUpperCase();
-        const shortLabel = labelFull.split("(")[0].trim();
-
-        blockDiv.innerHTML = `
-          <div class="block-time">${to12h(slice.start)} – ${to12h(slice.end)}</div>
-          <div class="block-main">${shortLabel}</div>
-        `;
-        blockDiv.title = `${labelFull} — ${ev.label}`;
-
-        complexRow.appendChild(blockDiv);
-      });
+      row.appendChild(div);
     });
 
-    complexRowContainer.appendChild(complexContainer);
+    col.appendChild(row);
+    complexContainer.appendChild(col);
   });
+
+  timeline.appendChild(complexContainer);
+  container.appendChild(timeline);
 }
 
-// ---- DAY VIEW WRAPPER ----
-function renderTimeline() {
-  const tl = document.getElementById("dayTimeline");
-  renderDayTimelineForDate(currentDate, tl);
-}
 
-// ---- WEEK VIEW: 7 DAYS, COMPLEXES SIDE-BY-SIDE ----
-function renderWeekView() {
-  const weekContainer = document.getElementById("weekTimeline");
+// ------------------------------------------------------------
+// WEEK VIEW
+// ------------------------------------------------------------
+function renderWeekView(startDate) {
+  const container = document.getElementById("view-container");
+  container.innerHTML = "";
 
-  weekContainer.innerHTML = `
-    <div class="timeline-times"></div>
-    <div class="week-days-container"></div>
-  `;
-
-  const timeCol = weekContainer.querySelector(".timeline-times");
-  const daysContainer = weekContainer.querySelector(".week-days-container");
-
-  // Time labels
-  for (let h = START_HOUR; h <= END_HOUR; h++) {
-    const top = (h - START_HOUR) * 60 * PIXELS_PER_MIN;
-    const label = document.createElement("div");
-    label.className = "time-label";
-    label.style.top = `${top}px`;
-    label.textContent = to12h(`${String(h).padStart(2, "0")}:00`);
-    timeCol.appendChild(label);
-  }
-
-  const monday = getMondayOfWeek(currentDate);
+  const monday = getMondayOfWeek(startDate);
+  const days = [];
 
   for (let i = 0; i < 7; i++) {
-    const day = new Date(monday);
-    day.setDate(monday.getDate() + i);
-    const dateKey = formatDateKey(day);
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    days.push(formatDateKey(d));
+  }
+
+  // ---- HEADER ----
+  const header = document.createElement("div");
+  header.className = "view-header";
+
+  const modeToggle = document.createElement("div");
+  modeToggle.className = "view-mode-toggle";
+
+  ["day", "week", "month", "search"].forEach(mode => {
+    const btn = document.createElement("button");
+    btn.className = "mode-btn" + (VIEW_MODE === mode ? " active" : "");
+    btn.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+    btn.onclick = () => {
+      VIEW_MODE = mode;
+      renderCurrentView();
+    };
+    modeToggle.appendChild(btn);
+  });
+
+  const controls = document.createElement("div");
+  controls.className = "controls";
+
+  const prevBtn = document.createElement("button");
+  prevBtn.className = "nav-btn";
+  prevBtn.textContent = "<";
+  prevBtn.onclick = () => {
+    currentDate.setDate(currentDate.getDate() - 7);
+    renderCurrentView();
+  };
+
+  const nextBtn = document.createElement("button");
+  nextBtn.className = "nav-btn";
+  nextBtn.textContent = ">";
+  nextBtn.onclick = () => {
+    currentDate.setDate(currentDate.getDate() + 7);
+    renderCurrentView();
+  };
+
+  const label = document.createElement("div");
+  label.className = "period-label";
+  label.textContent = `${formatShortDate(days[0])} - ${formatShortDate(days[6])}`;
+
+  controls.appendChild(prevBtn);
+  controls.appendChild(label);
+  controls.appendChild(nextBtn);
+
+  header.appendChild(modeToggle);
+  header.appendChild(controls);
+
+  container.appendChild(header);
+
+  // ---- FILTER BAR ----
+  const filterBar = document.createElement("div");
+  filterBar.className = "filter-bar";
+
+  const filterGroup = document.createElement("div");
+  filterGroup.className = "filter-button-group";
+
+  const allComplexes = [
+    "Holbrook HS Turf",
+    "Sumner / Sean Joyce Fields",
+    "Brookville Fields",
+    "Avon Butler Fields"
+  ];
+
+  allComplexes.forEach(c => {
+    const btn = document.createElement("button");
+    btn.className = "filter-btn" + (FILTER_COMPLEXES.has(c) ? " active" : "");
+    btn.textContent = c;
+
+    btn.onclick = () => {
+      if (FILTER_COMPLEXES.has(c)) {
+        FILTER_COMPLEXES.delete(c);
+      } else {
+        FILTER_COMPLEXES.add(c);
+      }
+      renderCurrentView();
+    };
+
+    filterGroup.appendChild(btn);
+  });
+
+  filterBar.appendChild(filterGroup);
+  container.appendChild(filterBar);
+
+  // ---- WEEK TIMELINE ----
+  const timeline = document.createElement("div");
+  timeline.id = "weekTimeline";
+
+  const daysContainer = document.createElement("div");
+  daysContainer.className = "week-days-container";
+
+  days.forEach(dateKey => {
+    const dayData = AVAIL[dateKey];
 
     const dayCol = document.createElement("div");
     dayCol.className = "week-day-column";
 
-    if (dateKey === formatDateKey(new Date())) {
+    const todayKey = formatDateKey(new Date());
+    if (dateKey === todayKey) {
       dayCol.classList.add("today");
     }
 
@@ -649,238 +553,2092 @@ function renderWeekView() {
 
     const dayTimeline = document.createElement("div");
     dayTimeline.className = "week-day-timeline";
-    dayCol.appendChild(dayTimeline);
 
-    daysContainer.appendChild(dayCol);
+    if (!dayData) {
+      const noData = document.createElement("div");
+      noData.className = "no-data";
+      noData.textContent = "No data";
+      dayTimeline.appendChild(noData);
+      dayCol.appendChild(dayTimeline);
+      daysContainer.appendChild(dayCol);
+      return;
+    }
 
-    renderWeekDayColumn(day, dayTimeline);
-  }
-}
+    const complexBlocks = buildComplexBlocks(dayData);
 
-function renderWeekDayColumn(dateObj, container) {
-  const dateKey = formatDateKey(dateObj);
+    allComplexes.forEach(complex => {
+      if (FILTER_COMPLEXES.size > 0 && !FILTER_COMPLEXES.has(complex)) return;
 
-  if (!AVAIL || !AVAIL.days || !AVAIL.days[dateKey]) {
-    container.innerHTML = `<p class="no-data">No availability.</p>`;
-    return;
-  }
+      const col = document.createElement("div");
+      col.className = "week-complex-column";
+      col.dataset.loc = complex;
 
-  const dayData = AVAIL.days[dateKey];
-  const fields = dayData.fields;
+      const title = document.createElement("div");
+      title.textContent = complex;
+      col.appendChild(title);
 
-  const FIELD_COMPLEX_MAP = buildFieldComplexMapForDay(dayData);
+      const sunsetMin = timeToMinutes(dayData.sunset);
+      const sunsetY = (sunsetMin - START_HOUR * 60) * PIXELS_PER_MIN;
 
-  const FIELD_MAP = {};
-  fields.forEach(f => {
-    FIELD_MAP[f.id] = {
-      id: f.id,
-      parent: f.name,
-      type: f.complex,
-      surface: f.surface,
-      location: FIELD_COMPLEX_MAP[f.id] || null
-    };
-  });
+      const sunsetLine = document.createElement("div");
+      sunsetLine.className = "sunset-line";
+      sunsetLine.style.top = `${sunsetY}px`;
 
-  const complexes = {};
-  fields.forEach(f => {
-    const loc = FIELD_COMPLEX_MAP[f.id];
-    if (!loc) return;
-    if (!complexes[loc]) complexes[loc] = [];
-    complexes[loc].push(f);
-  });
+      const sunsetLabel = document.createElement("div");
+      sunsetLabel.className = "sunset-label";
+      sunsetLabel.textContent = `Sunset ${to12h(dayData.sunset)}`;
 
-  const locKeys = Object.keys(complexes).filter(loc => FILTER_COMPLEXES.has(loc));
+      sunsetLine.appendChild(sunsetLabel);
+      col.appendChild(sunsetLine);
 
-  if (locKeys.length === 0) {
-    container.innerHTML = `<p class="no-data">No fields for selected locations.</p>`;
-    return;
-  }
+      complexBlocks[complex].forEach(b => {
+        const startMin = timeToMinutes(b.start);
+        const endMin = timeToMinutes(b.end);
 
-  container.style.display = "flex";
-  container.style.flexDirection = "row";
-  container.style.gap = "8px";
-  container.style.position = "relative";
+        const top = (startMin - START_HOUR * 60) * PIXELS_PER_MIN;
+        const height = (endMin - startMin) * PIXELS_PER_MIN;
 
-  // Grid lines + sunset
-  renderTimeGridLines(container);
-  renderSunsetLine(container, dayData);
+        const div = document.createElement("div");
+        div.className = `timeline-block timeline-${b.type}`;
+        div.style.top = `${top}px`;
+        div.style.height = `${height}px`;
 
-  locKeys.forEach(loc => {
-    const complexFields = complexes[loc];
+        const time = document.createElement("div");
+        time.className = "block-time";
+        time.textContent = `${to12h(b.start)} - ${to12h(b.end)}`;
 
-    const complexCol = document.createElement("div");
-    complexCol.className = "week-complex-column";
-    complexCol.dataset.loc = loc;
+        const main = document.createElement("div");
+        main.className = "block-main";
+        main.textContent = b.titles && b.titles.length > 0
+          ? b.titles.join(", ")
+          : b.fieldName;
 
-    const header = document.createElement("div");
-    header.textContent = loc;
+        div.appendChild(time);
+        div.appendChild(main);
 
-    const toggleBtn = document.createElement("button");
-    toggleBtn.textContent = "▼";
-    toggleBtn.className = "complex-toggle";
-    toggleBtn.onclick = () => {
-      inner.style.display =
-        inner.style.display === "none" ? "block" : "none";
-    };
-    header.appendChild(toggleBtn);
-
-    complexCol.appendChild(header);
-
-    const inner = document.createElement("div");
-    inner.style.position = "relative";
-    inner.style.height = `${(END_HOUR - START_HOUR) * 60 * PIXELS_PER_MIN}px`;
-    complexCol.appendChild(inner);
-
-    const slices = buildComplexSlices(complexFields, dayData, FIELD_MAP);
-
-    // Skip empty complexes
-    if (slices.length === 0) return;
-
-    slices.forEach(slice => {
-      const startMin = timeToMinutes(slice.start) - START_HOUR * 60;
-      const endMin = timeToMinutes(slice.end) - START_HOUR * 60;
-
-      const { events, freeFields, laneCount } = assignEventLanes(slice);
-
-      const hasAvailabilityLane = freeFields.length > 0;
-      const totalLanes = laneCount + (hasAvailabilityLane ? 1 : 0);
-      const laneWidthPercent = 100 / totalLanes;
-
-      if (hasAvailabilityLane) {
-        const allSame = freeFields.every(f => f.label === freeFields[0].label);
-        const freeLabels = allSame
-          ? freeFields[0].label
-          : freeFields.map(f => f.label).join(", ");
-
-        const blockDiv = document.createElement("div");
-        blockDiv.className = "timeline-block timeline-free";
-
-        blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
-        blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
-        blockDiv.style.left = `${laneCount * laneWidthPercent}%`;
-        blockDiv.style.width = `${laneWidthPercent}%`;
-
-        blockDiv.innerHTML = `
-          <div class="block-time">${to12h(slice.start)} – ${to12h(slice.end)}</div>
-          <div class="block-main">Available</div>
-        `;
-        blockDiv.title = `Available: ${freeLabels}`;
-
-        inner.appendChild(blockDiv);
-      }
-
-      events.forEach(ev => {
-        const blockDiv = document.createElement("div");
-        blockDiv.className = `timeline-block timeline-${classifyColor(ev)}`;
-
-        blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
-        blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
-        blockDiv.style.left = `${ev._lane * laneWidthPercent}%`;
-        blockDiv.style.width = `${laneWidthPercent}%`;
-
-        const labelFull = ev.title || ev.status.toUpperCase();
-        const shortLabel = labelFull.split("(")[0].trim();
-
-        blockDiv.innerHTML = `
-          <div class="block-time">${to12h(slice.start)} – ${to12h(slice.end)}</div>
-          <div class="block-main">${shortLabel}</div>
-        `;
-        blockDiv.title = `${labelFull} — ${ev.label}`;
-
-        inner.appendChild(blockDiv);
+        col.appendChild(div);
       });
+
+      dayTimeline.appendChild(col);
     });
 
-    container.appendChild(complexCol);
+    dayCol.appendChild(dayTimeline);
+    daysContainer.appendChild(dayCol);
+  });
+
+  timeline.appendChild(daysContainer);
+  container.appendChild(timeline);
+}
+
+// ------------------------------------------------------------
+// WEEK VIEW
+// ------------------------------------------------------------
+function renderWeekView(startDate) {
+  const container = document.getElementById("view-container");
+  container.innerHTML = "";
+
+  const monday = getMondayOfWeek(startDate);
+  const days = [];
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    days.push(formatDateKey(d));
+  }
+
+  // ---- HEADER ----
+  const header = document.createElement("div");
+  header.className = "view-header";
+
+  const modeToggle = document.createElement("div");
+  modeToggle.className = "view-mode-toggle";
+
+  ["day", "week", "month", "search"].forEach(mode => {
+    const btn = document.createElement("button");
+    btn.className = "mode-btn" + (VIEW_MODE === mode ? " active" : "");
+    btn.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+    btn.onclick = () => {
+      VIEW_MODE = mode;
+      renderCurrentView();
+    };
+    modeToggle.appendChild(btn);
+  });
+
+  const controls = document.createElement("div");
+  controls.className = "controls";
+
+  const prevBtn = document.createElement("button");
+  prevBtn.className = "nav-btn";
+  prevBtn.textContent = "<";
+  prevBtn.onclick = () => {
+    currentDate.setDate(currentDate.getDate() - 7);
+    renderCurrentView();
+  };
+
+  const nextBtn = document.createElement("button");
+  nextBtn.className = "nav-btn";
+  nextBtn.textContent = ">";
+  nextBtn.onclick = () => {
+    currentDate.setDate(currentDate.getDate() + 7);
+    renderCurrentView();
+  };
+
+  const label = document.createElement("div");
+  label.className = "period-label";
+  label.textContent = `${formatShortDate(days[0])} - ${formatShortDate(days[6])}`;
+
+  controls.appendChild(prevBtn);
+  controls.appendChild(label);
+  controls.appendChild(nextBtn);
+
+  header.appendChild(modeToggle);
+  header.appendChild(controls);
+
+  container.appendChild(header);
+
+  // ---- FILTER BAR ----
+  const filterBar = document.createElement("div");
+  filterBar.className = "filter-bar";
+
+  const filterGroup = document.createElement("div");
+  filterGroup.className = "filter-button-group";
+
+  const allComplexes = [
+    "Holbrook HS Turf",
+    "Sumner / Sean Joyce Fields",
+    "Brookville Fields",
+    "Avon Butler Fields"
+  ];
+
+  allComplexes.forEach(c => {
+    const btn = document.createElement("button");
+    btn.className = "filter-btn" + (FILTER_COMPLEXES.has(c) ? " active" : "");
+    btn.textContent = c;
+
+    btn.onclick = () => {
+      if (FILTER_COMPLEXES.has(c)) {
+        FILTER_COMPLEXES.delete(c);
+      } else {
+        FILTER_COMPLEXES.add(c);
+      }
+      renderCurrentView();
+    };
+
+    filterGroup.appendChild(btn);
+  });
+
+  filterBar.appendChild(filterGroup);
+  container.appendChild(filterBar);
+
+  // ---- WEEK TIMELINE ----
+  const timeline = document.createElement("div");
+  timeline.id = "weekTimeline";
+
+  const daysContainer = document.createElement("div");
+  daysContainer.className = "week-days-container";
+
+  days.forEach(dateKey => {
+    const dayData = AVAIL[dateKey];
+
+    const dayCol = document.createElement("div");
+    dayCol.className = "week-day-column";
+
+    const todayKey = formatDateKey(new Date());
+    if (dateKey === todayKey) {
+      dayCol.classList.add("today");
+    }
+
+    const header = document.createElement("div");
+    header.className = "week-day-header";
+    header.textContent = formatShortDate(dateKey);
+    dayCol.appendChild(header);
+
+    const dayTimeline = document.createElement("div");
+    dayTimeline.className = "week-day-timeline";
+
+    if (!dayData) {
+      const noData = document.createElement("div");
+      noData.className = "no-data";
+      noData.textContent = "No data";
+      dayTimeline.appendChild(noData);
+      dayCol.appendChild(dayTimeline);
+      daysContainer.appendChild(dayCol);
+      return;
+    }
+
+    const complexBlocks = buildComplexBlocks(dayData);
+
+    allComplexes.forEach(complex => {
+      if (FILTER_COMPLEXES.size > 0 && !FILTER_COMPLEXES.has(complex)) return;
+
+      const col = document.createElement("div");
+      col.className = "week-complex-column";
+      col.dataset.loc = complex;
+
+      const title = document.createElement("div");
+      title.textContent = complex;
+      col.appendChild(title);
+
+      const sunsetMin = timeToMinutes(dayData.sunset);
+      const sunsetY = (sunsetMin - START_HOUR * 60) * PIXELS_PER_MIN;
+
+      const sunsetLine = document.createElement("div");
+      sunsetLine.className = "sunset-line";
+      sunsetLine.style.top = `${sunsetY}px`;
+
+      const sunsetLabel = document.createElement("div");
+      sunsetLabel.className = "sunset-label";
+      sunsetLabel.textContent = `Sunset ${to12h(dayData.sunset)}`;
+
+      sunsetLine.appendChild(sunsetLabel);
+      col.appendChild(sunsetLine);
+
+      complexBlocks[complex].forEach(b => {
+        const startMin = timeToMinutes(b.start);
+        const endMin = timeToMinutes(b.end);
+
+        const top = (startMin - START_HOUR * 60) * PIXELS_PER_MIN;
+        const height = (endMin - startMin) * PIXELS_PER_MIN;
+
+        const div = document.createElement("div");
+        div.className = `timeline-block timeline-${b.type}`;
+        div.style.top = `${top}px`;
+        div.style.height = `${height}px`;
+
+        const time = document.createElement("div");
+        time.className = "block-time";
+        time.textContent = `${to12h(b.start)} - ${to12h(b.end)}`;
+
+        const main = document.createElement("div");
+        main.className = "block-main";
+        main.textContent = b.titles && b.titles.length > 0
+          ? b.titles.join(", ")
+          : b.fieldName;
+
+        div.appendChild(time);
+        div.appendChild(main);
+
+        col.appendChild(div);
+      });
+
+      dayTimeline.appendChild(col);
+    });
+
+    dayCol.appendChild(dayTimeline);
+    daysContainer.appendChild(dayCol);
+  });
+
+  timeline.appendChild(daysContainer);
+  container.appendChild(timeline);
+}
+
+
+// ------------------------------------------------------------
+// MONTH VIEW
+// ------------------------------------------------------------
+function renderMonthView(date) {
+  const container = document.getElementById("view-container");
+  container.innerHTML = "";
+
+  const year = date.getFullYear();
+  const month = date.getMonth();
+
+  const firstDay = new Date(year, month, 1);
+  const startDay = firstDay.getDay();
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  // ---- HEADER ----
+  const header = document.createElement("div");
+  header.className = "view-header";
+
+  const modeToggle = document.createElement("div");
+  modeToggle.className = "view-mode-toggle";
+
+  ["day", "week", "month", "search"].forEach(mode => {
+    const btn = document.createElement("button");
+    btn.className = "mode-btn" + (VIEW_MODE === mode ? " active" : "");
+    btn.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+    btn.onclick = () => {
+      VIEW_MODE = mode;
+      renderCurrentView();
+    };
+    modeToggle.appendChild(btn);
+  });
+
+  const controls = document.createElement("div");
+  controls.className = "controls";
+
+  const prevBtn = document.createElement("button");
+  prevBtn.className = "nav-btn";
+  prevBtn.textContent = "<";
+  prevBtn.onclick = () => {
+    currentDate.setMonth(currentDate.getMonth() - 1);
+    renderCurrentView();
+  };
+
+  const nextBtn = document.createElement("button");
+  nextBtn.className = "nav-btn";
+  nextBtn.textContent = ">";
+  nextBtn.onclick = () => {
+    currentDate.setMonth(currentDate.getMonth() + 1);
+    renderCurrentView();
+  };
+
+  const label = document.createElement("div");
+  label.className = "period-label";
+  label.textContent = `${date.toLocaleString("en-US", { month: "long" })} ${year}`;
+
+  controls.appendChild(prevBtn);
+  controls.appendChild(label);
+  controls.appendChild(nextBtn);
+
+  header.appendChild(modeToggle);
+  header.appendChild(controls);
+
+  container.appendChild(header);
+
+  // ---- GRID ----
+  const grid = document.createElement("div");
+  grid.className = "month-grid";
+
+  // Create empty cells before the first day
+  for (let i = 0; i < startDay; i++) {
+    const cell = document.createElement("div");
+    cell.className = "month-cell empty";
+    grid.appendChild(cell);
+  }
+
+  // Create day cells
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cell = document.createElement("div");
+    cell.className = "month-cell";
+
+    const dateKey = formatDateKey(new Date(year, month, d));
+    const dayData = AVAIL[dateKey];
+
+    const num = document.createElement("div");
+    num.className = "month-day-number";
+    num.textContent = d;
+    cell.appendChild(num);
+
+    if (dayData) {
+      const hasGames = dayData.fields.some(f => f.games.length > 0);
+      const hasPractice = dayData.fields.some(f => f.practice.length > 0);
+
+      if (hasGames) {
+        const tag = document.createElement("div");
+        tag.className = "month-tag game-tag";
+        tag.textContent = "Games";
+        cell.appendChild(tag);
+      }
+
+      if (hasPractice) {
+        const tag = document.createElement("div");
+        tag.className = "month-tag practice-tag";
+        tag.textContent = "Practice";
+        cell.appendChild(tag);
+      }
+    }
+
+    cell.onclick = () => {
+      currentDate = new Date(year, month, d);
+      VIEW_MODE = "day";
+      renderCurrentView();
+    };
+
+    grid.appendChild(cell);
+  }
+
+  container.appendChild(grid);
+}
+
+// ------------------------------------------------------------
+// SEARCH VIEW
+// ------------------------------------------------------------
+function renderSearchView() {
+  const container = document.getElementById("view-container");
+  container.innerHTML = "";
+
+  const header = document.createElement("div");
+  header.className = "view-header";
+
+  const modeToggle = document.createElement("div");
+  modeToggle.className = "view-mode-toggle";
+
+  ["day", "week", "month", "search"].forEach(mode => {
+    const btn = document.createElement("button");
+    btn.className = "mode-btn" + (VIEW_MODE === mode ? " active" : "");
+    btn.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+    btn.onclick = () => {
+      VIEW_MODE = mode;
+      renderCurrentView();
+    };
+    modeToggle.appendChild(btn);
+  });
+
+  header.appendChild(modeToggle);
+
+  container.appendChild(header);
+
+  const searchBox = document.createElement("input");
+  searchBox.type = "text";
+  searchBox.placeholder = "Search teams, fields, games...";
+  searchBox.className = "search-box";
+
+  const results = document.createElement("div");
+  results.className = "search-results";
+
+  searchBox.oninput = () => {
+    const q = searchBox.value.toLowerCase();
+    results.innerHTML = "";
+
+    if (!q) return;
+
+    const matches = SEARCH.filter(item =>
+      item.text.toLowerCase().includes(q)
+    );
+
+    matches.forEach(m => {
+      const div = document.createElement("div");
+      div.className = "search-item";
+      div.textContent = m.text;
+
+      div.onclick = () => {
+        currentDate = new Date(m.date);
+        VIEW_MODE = "day";
+        renderCurrentView();
+      };
+
+      results.appendChild(div);
+    });
+  };
+
+  container.appendChild(searchBox);
+  container.appendChild(results);
+}
+
+
+// ------------------------------------------------------------
+// RENDER CURRENT VIEW
+// ------------------------------------------------------------
+function renderCurrentView() {
+  const dateKey = formatDateKey(currentDate);
+
+  if (VIEW_MODE === "day") {
+    renderDayView(dateKey);
+  } else if (VIEW_MODE === "week") {
+    renderWeekView(currentDate);
+  } else if (VIEW_MODE === "month") {
+    renderMonthView(currentDate);
+  } else if (VIEW_MODE === "search") {
+    renderSearchView();
+  }
+}
+
+// ------------------------------------------------------------
+// INIT
+// ------------------------------------------------------------
+async function initCalendar() {
+  await loadSearchIndex();
+  await loadAvailability();
+  renderCurrentView();
+}
+
+document.addEventListener("DOMContentLoaded", initCalendar);
+
+// ------------------------------------------------------------
+// EXTRA UTILITIES (GRID, SUNSET, BLOCKS)
+// ------------------------------------------------------------
+
+// Build horizontal grid lines for any timeline container
+function buildGridLines(container) {
+  for (let h = START_HOUR; h <= END_HOUR; h++) {
+    const y = (h - START_HOUR) * 60 * PIXELS_PER_MIN;
+
+    const line = document.createElement("div");
+    line.className = "time-grid-line";
+    line.style.top = `${y}px`;
+
+    container.appendChild(line);
+  }
+}
+
+// Build sunset line for any timeline container
+function buildSunsetLine(container, sunsetTime) {
+  const sunsetMin = timeToMinutes(sunsetTime);
+  const sunsetY = (sunsetMin - START_HOUR * 60) * PIXELS_PER_MIN;
+
+  const sunsetLine = document.createElement("div");
+  sunsetLine.className = "sunset-line";
+  sunsetLine.style.top = `${sunsetY}px`;
+
+  const sunsetLabel = document.createElement("div");
+  sunsetLabel.className = "sunset-label";
+  sunsetLabel.textContent = `Sunset ${to12h(sunsetTime)}`;
+
+  sunsetLine.appendChild(sunsetLabel);
+  container.appendChild(sunsetLine);
+}
+
+// Build blocks inside a timeline column
+function buildBlocks(container, blocks) {
+  blocks.forEach(b => {
+    const startMin = timeToMinutes(b.start);
+    const endMin = timeToMinutes(b.end);
+
+    const top = (startMin - START_HOUR * 60) * PIXELS_PER_MIN;
+    const height = (endMin - startMin) * PIXELS_PER_MIN;
+
+    const div = document.createElement("div");
+    div.className = `timeline-block timeline-${b.type}`;
+    div.style.top = `${top}px`;
+    div.style.height = `${height}px`;
+
+    const time = document.createElement("div");
+    time.className = "block-time";
+    time.textContent = `${to12h(b.start)} - ${to12h(b.end)}`;
+
+    const main = document.createElement("div");
+    main.className = "block-main";
+    main.textContent = b.titles && b.titles.length > 0
+      ? b.titles.join(", ")
+      : b.fieldName;
+
+    div.appendChild(time);
+    div.appendChild(main);
+
+    container.appendChild(div);
   });
 }
 
-// ---- INIT ----
-document.addEventListener("DOMContentLoaded", async () => {
-  await loadAvailability();
-  await loadSearchIndex();
-  render();
-});
+// ------------------------------------------------------------
+// DEBUG UTILITIES
+// ------------------------------------------------------------
 
-// ---- MAIN RENDER ----
-function render() {
-  const container = document.getElementById("view-container");
-
-  const dateKey = formatDateKey(currentDate);
-  const humanDate = formatHumanDate(dateKey);
-
-  const monday = getMondayOfWeek(currentDate);
-  const mondayKey = formatDateKey(monday);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  const sundayKey = formatDateKey(sunday);
-
-  const weekLabel = `${formatShortDate(mondayKey)} – ${formatShortDate(sundayKey)}`;
-
-  container.innerHTML = `
-    <div class="view-header">
-      <div class="view-mode-toggle">
-        <button id="dayModeBtn" class="${VIEW_MODE === "day" ? "mode-btn active" : "mode-btn"}">Day</button>
-        <button id="weekModeBtn" class="${VIEW_MODE === "week" ? "mode-btn active" : "mode-btn"}">Week</button>
-      </div>
-      <div class="controls">
-        <button id="prevPeriod" class="nav-btn">←</button>
-        <button id="todayBtn" class="nav-btn">Today</button>
-        <span class="period-label">
-          ${VIEW_MODE === "day" ? humanDate : `Week of ${weekLabel}`}
-        </span>
-        <button id="nextPeriod" class="nav-btn">→</button>
-      </div>
-    </div>
-    <div id="filter-bar" class="filter-bar"></div>
-    <div id="dayTimeline" class="${VIEW_MODE === "day" ? "" : "hidden"}"></div>
-    <div id="weekTimeline" class="${VIEW_MODE === "week" ? "" : "hidden"}"></div>
-  `;
-
-  document.getElementById("dayModeBtn").onclick = () => {
-    VIEW_MODE = "day";
-    render();
-  };
-  document.getElementById("weekModeBtn").onclick = () => {
-    VIEW_MODE = "week";
-    render();
-  };
-
-  document.getElementById("prevPeriod").onclick = () => {
-    currentDate.setDate(currentDate.getDate() + (VIEW_MODE === "day" ? -1 : -7));
-    render();
-  };
-
-  document.getElementById("nextPeriod").onclick = () => {
-    currentDate.setDate(currentDate.getDate() + (VIEW_MODE === "day" ? 1 : 7));
-    render();
-  };
-
-  document.getElementById("todayBtn").onclick = () => {
-    currentDate = new Date();
-    render();
-  };
-
-  // For filters, we need fields from current day/week
-  if (AVAIL && AVAIL.days) {
-    const dayData = AVAIL.days[formatDateKey(currentDate)];
-    if (dayData) {
-      const FIELD_COMPLEX_MAP = buildFieldComplexMapForDay(dayData);
-      renderFilters(dayData.fields, FIELD_COMPLEX_MAP);
-    } else {
-      // fallback: use first available day
-      const keys = Object.keys(AVAIL.days);
-      if (keys.length > 0) {
-        const anyDay = AVAIL.days[keys[0]];
-        const FIELD_COMPLEX_MAP = buildFieldComplexMapForDay(anyDay);
-        renderFilters(anyDay.fields, FIELD_COMPLEX_MAP);
-      }
-    }
+// Print all complexes for a given day
+function debugComplexes(dateKey) {
+  const dayData = AVAIL[dateKey];
+  if (!dayData) {
+    console.log("No data for", dateKey);
+    return;
   }
+
+  const complexBlocks = buildComplexBlocks(dayData);
+  console.log("Complexes for", dateKey, complexBlocks);
+}
+
+// Print all blocks for a given field
+function debugField(dateKey, fieldId) {
+  const dayData = AVAIL[dateKey];
+  if (!dayData) {
+    console.log("No data for", dateKey);
+    return;
+  }
+
+  const field = dayData.fields.find(f => f.id === fieldId);
+  if (!field) {
+    console.log("Field not found:", fieldId);
+    return;
+  }
+
+  const blocks = buildFieldBlocks(field, dayData);
+  console.log("Blocks for field", fieldId, blocks);
+}
+
+// Print merged blocks
+function debugMergedBlocks(blocks) {
+  console.log("Merged blocks:", mergeSameTimeBlocks(blocks));
+}
+
+
+// ------------------------------------------------------------
+// ADVANCED BLOCK BUILDING (MERGING FREE + USAGE)
+// ------------------------------------------------------------
+
+// Build unified blocks for rendering (free, practice, game, admin)
+function buildUnifiedBlocks(fieldAvail, fieldOriginal) {
+  const blocks = [];
+
+  // Free windows
+  fieldAvail.free.forEach(win => {
+    blocks.push({
+      start: win.start,
+      end: win.end,
+      type: "free",
+      title: null,
+      fieldName: fieldOriginal.name
+    });
+  });
+
+  // Practice
+  fieldAvail.practice.forEach(p => {
+    blocks.push({
+      start: p.start,
+      end: p.end,
+      type: "practice",
+      title: p.team,
+      fieldName: fieldOriginal.name
+    });
+  });
+
+  // Games
+  fieldAvail.games.forEach(g => {
+    blocks.push({
+      start: g.start,
+      end: g.end,
+      type: "game",
+      title: `${g.home} vs ${g.away}`,
+      fieldName: fieldOriginal.name
+    });
+  });
+
+  // Admin
+  fieldAvail.admin.forEach(a => {
+    blocks.push({
+      start: a.start,
+      end: a.end,
+      type: "admin",
+      title: a.reason,
+      fieldName: fieldOriginal.name
+    });
+  });
+
+  return mergeSameTimeBlocks(blocks);
+}
+
+// Build unified complex blocks
+function buildUnifiedComplexBlocks(dayData) {
+  const complexMap = buildFieldComplexMapForDay(dayData);
+  const dayAvail = buildDayAvailability(dayData);
+
+  const result = {};
+
+  Object.values(complexMap).forEach(c => {
+    result[c] = [];
+  });
+
+  dayData.fields.forEach(field => {
+    const complex = complexMap[field.id];
+    const avail = dayAvail[field.id];
+    const blocks = buildUnifiedBlocks(avail, field);
+
+    blocks.forEach(b => {
+      result[complex].push({
+        ...b,
+        fieldId: field.id
+      });
+    });
+  });
+
+  return result;
+}
+
+// ------------------------------------------------------------
+// WEEK VIEW (ADVANCED VERSION USING UNIFIED BLOCKS)
+// ------------------------------------------------------------
+function renderWeekViewUnified(startDate) {
+  const container = document.getElementById("view-container");
+  container.innerHTML = "";
+
+  const monday = getMondayOfWeek(startDate);
+  const days = [];
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    days.push(formatDateKey(d));
+  }
+
+  // Header
+  const header = document.createElement("div");
+  header.className = "view-header";
+
+  const modeToggle = document.createElement("div");
+  modeToggle.className = "view-mode-toggle";
+
+  ["day", "week", "month", "search"].forEach(mode => {
+    const btn = document.createElement("button");
+    btn.className = "mode-btn" + (VIEW_MODE === mode ? " active" : "");
+    btn.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+    btn.onclick = () => {
+      VIEW_MODE = mode;
+      renderCurrentView();
+    };
+    modeToggle.appendChild(btn);
+  });
+
+  const controls = document.createElement("div");
+  controls.className = "controls";
+
+  const prevBtn = document.createElement("button");
+  prevBtn.className = "nav-btn";
+  prevBtn.textContent = "<";
+  prevBtn.onclick = () => {
+    currentDate.setDate(currentDate.getDate() - 7);
+    renderCurrentView();
+  };
+
+  const nextBtn = document.createElement("button");
+  nextBtn.className = "nav-btn";
+  nextBtn.textContent = ">";
+  nextBtn.onclick = () => {
+    currentDate.setDate(currentDate.getDate() + 7);
+    renderCurrentView();
+  };
+
+  const label = document.createElement("div");
+  label.className = "period-label";
+  label.textContent = `${formatShortDate(days[0])} - ${formatShortDate(days[6])}`;
+
+  controls.appendChild(prevBtn);
+  controls.appendChild(label);
+  controls.appendChild(nextBtn);
+
+  header.appendChild(modeToggle);
+  header.appendChild(controls);
+
+  container.appendChild(header);
+
+  // Filter bar
+  const filterBar = document.createElement("div");
+  filterBar.className = "filter-bar";
+
+  const filterGroup = document.createElement("div");
+  filterGroup.className = "filter-button-group";
+
+  const allComplexes = [
+    "Holbrook HS Turf",
+    "Sumner / Sean Joyce Fields",
+    "Brookville Fields",
+    "Avon Butler Fields"
+  ];
+
+  allComplexes.forEach(c => {
+    const btn = document.createElement("button");
+    btn.className = "filter-btn" + (FILTER_COMPLEXES.has(c) ? " active" : "");
+    btn.textContent = c;
+
+    btn.onclick = () => {
+      if (FILTER_COMPLEXES.has(c)) {
+        FILTER_COMPLEXES.delete(c);
+      } else {
+        FILTER_COMPLEXES.add(c);
+      }
+      renderCurrentView();
+    };
+
+    filterGroup.appendChild(btn);
+  });
+
+  filterBar.appendChild(filterGroup);
+  container.appendChild(filterBar);
+
+  // Timeline
+  const timeline = document.createElement("div");
+  timeline.id = "weekTimeline";
+
+  const daysContainer = document.createElement("div");
+  daysContainer.className = "week-days-container";
+
+  days.forEach(dateKey => {
+    const dayData = AVAIL[dateKey];
+
+    const dayCol = document.createElement("div");
+    dayCol.className = "week-day-column";
+
+    const todayKey = formatDateKey(new Date());
+    if (dateKey === todayKey) {
+      dayCol.classList.add("today");
+    }
+
+    const header = document.createElement("div");
+    header.className = "week-day-header";
+    header.textContent = formatShortDate(dateKey);
+    dayCol.appendChild(header);
+
+    const dayTimeline = document.createElement("div");
+    dayTimeline.className = "week-day-timeline";
+
+    if (!dayData) {
+      const noData = document.createElement("div");
+      noData.className = "no-data";
+      noData.textContent = "No data";
+      dayTimeline.appendChild(noData);
+      dayCol.appendChild(dayTimeline);
+      daysContainer.appendChild(dayCol);
+      return;
+    }
+
+    const complexBlocks = buildUnifiedComplexBlocks(dayData);
+
+    allComplexes.forEach(complex => {
+      if (FILTER_COMPLEXES.size > 0 && !FILTER_COMPLEXES.has(complex)) return;
+
+      const col = document.createElement("div");
+      col.className = "week-complex-column";
+      col.dataset.loc = complex;
+
+      const title = document.createElement("div");
+      title.textContent = complex;
+      col.appendChild(title);
+
+      // Sunset
+      const sunsetMin = timeToMinutes(dayData.sunset);
+      const sunsetY = (sunsetMin - START_HOUR * 60) * PIXELS_PER_MIN;
+
+      const sunsetLine = document.createElement("div");
+      sunsetLine.className = "sunset-line";
+      sunsetLine.style.top = `${sunsetY}px`;
+
+      const sunsetLabel = document.createElement("div");
+      sunsetLabel.className = "sunset-label";
+      sunsetLabel.textContent = `Sunset ${to12h(dayData.sunset)}`;
+
+      sunsetLine.appendChild(sunsetLabel);
+      col.appendChild(sunsetLine);
+
+      // Blocks
+      complexBlocks[complex].forEach(b => {
+        const startMin = timeToMinutes(b.start);
+        const endMin = timeToMinutes(b.end);
+
+        const top = (startMin - START_HOUR * 60) * PIXELS_PER_MIN;
+        const height = (endMin - startMin) * PIXELS_PER_MIN;
+
+        const div = document.createElement("div");
+        div.className = `timeline-block timeline-${b.type}`;
+        div.style.top = `${top}px`;
+        div.style.height = `${height}px`;
+
+        const time = document.createElement("div");
+        time.className = "block-time";
+        time.textContent = `${to12h(b.start)} - ${to12h(b.end)}`;
+
+        const main = document.createElement("div");
+        main.className = "block-main";
+        main.textContent = b.title || b.fieldName;
+
+        div.appendChild(time);
+        div.appendChild(main);
+
+        col.appendChild(div);
+      });
+
+      dayTimeline.appendChild(col);
+    });
+
+    dayCol.appendChild(dayTimeline);
+    daysContainer.appendChild(dayCol);
+  });
+
+  timeline.appendChild(daysContainer);
+  container.appendChild(timeline);
+}
+
+// ------------------------------------------------------------
+// DAY VIEW (ADVANCED VERSION USING UNIFIED BLOCKS)
+// ------------------------------------------------------------
+function renderDayViewUnified(dateKey) {
+  const container = document.getElementById("view-container");
+  container.innerHTML = "";
+
+  const dayData = AVAIL[dateKey];
+  if (!dayData) {
+    container.innerHTML = `<div class="no-data">No data for ${dateKey}</div>`;
+    return;
+  }
+
+  const complexBlocks = buildUnifiedComplexBlocks(dayData);
+
+  // Header
+  const header = document.createElement("div");
+  header.className = "view-header";
+
+  const modeToggle = document.createElement("div");
+  modeToggle.className = "view-mode-toggle";
+
+  ["day", "week", "month", "search"].forEach(mode => {
+    const btn = document.createElement("button");
+    btn.className = "mode-btn" + (VIEW_MODE === mode ? " active" : "");
+    btn.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+    btn.onclick = () => {
+      VIEW_MODE = mode;
+      renderCurrentView();
+    };
+    modeToggle.appendChild(btn);
+  });
+
+  const controls = document.createElement("div");
+  controls.className = "controls";
+
+  const prevBtn = document.createElement("button");
+  prevBtn.className = "nav-btn";
+  prevBtn.textContent = "<";
+  prevBtn.onclick = () => {
+    currentDate.setDate(currentDate.getDate() - 1);
+    renderCurrentView();
+  };
+
+  const nextBtn = document.createElement("button");
+  nextBtn.className = "nav-btn";
+  nextBtn.textContent = ">";
+  nextBtn.onclick = () => {
+    currentDate.setDate(currentDate.getDate() + 1);
+    renderCurrentView();
+  };
+
+  const label = document.createElement("div");
+  label.className = "period-label";
+  label.textContent = formatHumanDate(dateKey);
+
+  controls.appendChild(prevBtn);
+  controls.appendChild(label);
+  controls.appendChild(nextBtn);
+
+  header.appendChild(modeToggle);
+  header.appendChild(controls);
+
+  container.appendChild(header);
+
+  // Filter bar
+  const filterBar = document.createElement("div");
+  filterBar.className = "filter-bar";
+
+  const filterGroup = document.createElement("div");
+  filterGroup.className = "filter-button-group";
+
+  const complexes = Object.keys(complexBlocks);
+
+  complexes.forEach(c => {
+    const btn = document.createElement("button");
+    btn.className = "filter-btn" + (FILTER_COMPLEXES.has(c) ? " active" : "");
+    btn.textContent = c;
+
+    btn.onclick = () => {
+      if (FILTER_COMPLEXES.has(c)) {
+        FILTER_COMPLEXES.delete(c);
+      } else {
+        FILTER_COMPLEXES.add(c);
+      }
+      renderCurrentView();
+    };
+
+    filterGroup.appendChild(btn);
+  });
+
+  filterBar.appendChild(filterGroup);
+  container.appendChild(filterBar);
+
+  // Timeline
+  const timeline = document.createElement("div");
+  timeline.id = "dayTimeline";
+
+  const times = document.createElement("div");
+  times.className = "timeline-times";
+
+  for (let h = START_HOUR; h <= END_HOUR; h++) {
+    const y = (h - START_HOUR) * 60 * PIXELS_PER_MIN;
+
+    const lbl = document.createElement("div");
+    lbl.className = "time-label";
+    lbl.style.top = `${y - 6}px`;
+    lbl.textContent = `${h}:00`;
+    times.appendChild(lbl);
+
+    const line = document.createElement("div");
+    line.className = "time-grid-line";
+    line.style.top = `${y}px`;
+    times.appendChild(line);
+  }
+
+  timeline.appendChild(times);
+
+  const complexContainer = document.createElement("div");
+  complexContainer.className = "day-complexes";
+
+  complexes.forEach(complex => {
+    if (FILTER_COMPLEXES.size > 0 && !FILTER_COMPLEXES.has(complex)) return;
+
+    const col = document.createElement("div");
+    col.className = "complex-column";
+
+    const h3 = document.createElement("h3");
+    h3.textContent = complex;
+    col.appendChild(h3);
+
+    const row = document.createElement("div");
+    row.className = "complex-row";
+
+    const sunsetMin = timeToMinutes(dayData.sunset);
+    const sunsetY = (sunsetMin - START_HOUR * 60) * PIXELS_PER_MIN;
+
+    const sunsetLine = document.createElement("div");
+    sunsetLine.className = "sunset-line";
+    sunsetLine.style.top = `${sunsetY}px`;
+
+    const sunsetLabel = document.createElement("div");
+    sunsetLabel.className = "sunset-label";
+    sunsetLabel.textContent = `Sunset ${to12h(dayData.sunset)}`;
+
+    sunsetLine.appendChild(sunsetLabel);
+    row.appendChild(sunsetLine);
+
+    complexBlocks[complex].forEach(b => {
+      const startMin = timeToMinutes(b.start);
+      const endMin = timeToMinutes(b.end);
+
+      const top = (startMin - START_HOUR * 60) * PIXELS_PER_MIN;
+      const height = (endMin - startMin) * PIXELS_PER_MIN;
+
+      const div = document.createElement("div");
+      div.className = `timeline-block timeline-${b.type}`;
+      div.style.top = `${top}px`;
+      div.style.height = `${height}px`;
+
+      const time = document.createElement("div");
+      time.className = "block-time";
+      time.textContent = `${to12h(b.start)} - ${to12h(b.end)}`;
+
+      const main = document.createElement("div");
+      main.className = "block-main";
+      main.textContent = b.title || b.fieldName;
+
+      div.appendChild(time);
+      div.appendChild(main);
+
+      row.appendChild(div);
+    });
+
+    col.appendChild(row);
+    complexContainer.appendChild(col);
+  });
+
+  timeline.appendChild(complexContainer);
+  container.appendChild(timeline);
+}
+
+
+// ------------------------------------------------------------
+// DAY VIEW (ADVANCED VERSION USING UNIFIED BLOCKS)
+// ------------------------------------------------------------
+function renderDayViewUnified(dateKey) {
+  const container = document.getElementById("view-container");
+  container.innerHTML = "";
+
+  const dayData = AVAIL[dateKey];
+  if (!dayData) {
+    container.innerHTML = `<div class="no-data">No data for ${dateKey}</div>`;
+    return;
+  }
+
+  const complexBlocks = buildUnifiedComplexBlocks(dayData);
+
+  // Header
+  const header = document.createElement("div");
+  header.className = "view-header";
+
+  const modeToggle = document.createElement("div");
+  modeToggle.className = "view-mode-toggle";
+
+  ["day", "week", "month", "search"].forEach(mode => {
+    const btn = document.createElement("button");
+    btn.className = "mode-btn" + (VIEW_MODE === mode ? " active" : "");
+    btn.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+    btn.onclick = () => {
+      VIEW_MODE = mode;
+      renderCurrentView();
+    };
+    modeToggle.appendChild(btn);
+  });
+
+  const controls = document.createElement("div");
+  controls.className = "controls";
+
+  const prevBtn = document.createElement("button");
+  prevBtn.className = "nav-btn";
+  prevBtn.textContent = "<";
+  prevBtn.onclick = () => {
+    currentDate.setDate(currentDate.getDate() - 1);
+    renderCurrentView();
+  };
+
+  const nextBtn = document.createElement("button");
+  nextBtn.className = "nav-btn";
+  nextBtn.textContent = ">";
+  nextBtn.onclick = () => {
+    currentDate.setDate(currentDate.getDate() + 1);
+    renderCurrentView();
+  };
+
+  const label = document.createElement("div");
+  label.className = "period-label";
+  label.textContent = formatHumanDate(dateKey);
+
+  controls.appendChild(prevBtn);
+  controls.appendChild(label);
+  controls.appendChild(nextBtn);
+
+  header.appendChild(modeToggle);
+  header.appendChild(controls);
+
+  container.appendChild(header);
+
+  // Filter bar
+  const filterBar = document.createElement("div");
+  filterBar.className = "filter-bar";
+
+  const filterGroup = document.createElement("div");
+  filterGroup.className = "filter-button-group";
+
+  const complexes = Object.keys(complexBlocks);
+
+  complexes.forEach(c => {
+    const btn = document.createElement("button");
+    btn.className = "filter-btn" + (FILTER_COMPLEXES.has(c) ? " active" : "");
+    btn.textContent = c;
+
+    btn.onclick = () => {
+      if (FILTER_COMPLEXES.has(c)) {
+        FILTER_COMPLEXES.delete(c);
+      } else {
+        FILTER_COMPLEXES.add(c);
+      }
+      renderCurrentView();
+    };
+
+    filterGroup.appendChild(btn);
+  });
+
+  filterBar.appendChild(filterGroup);
+  container.appendChild(filterBar);
+
+  // Timeline
+  const timeline = document.createElement("div");
+  timeline.id = "dayTimeline";
+
+  const times = document.createElement("div");
+  times.className = "timeline-times";
+
+  for (let h = START_HOUR; h <= END_HOUR; h++) {
+    const y = (h - START_HOUR) * 60 * PIXELS_PER_MIN;
+
+    const lbl = document.createElement("div");
+    lbl.className = "time-label";
+    lbl.style.top = `${y - 6}px`;
+    lbl.textContent = `${h}:00`;
+    times.appendChild(lbl);
+
+    const line = document.createElement("div");
+    line.className = "time-grid-line";
+    line.style.top = `${y}px`;
+    times.appendChild(line);
+  }
+
+  timeline.appendChild(times);
+
+  const complexContainer = document.createElement("div");
+  complexContainer.className = "day-complexes";
+
+  complexes.forEach(complex => {
+    if (FILTER_COMPLEXES.size > 0 && !FILTER_COMPLEXES.has(complex)) return;
+
+    const col = document.createElement("div");
+    col.className = "complex-column";
+
+    const h3 = document.createElement("h3");
+    h3.textContent = complex;
+    col.appendChild(h3);
+
+    const row = document.createElement("div");
+    row.className = "complex-row";
+
+    const sunsetMin = timeToMinutes(dayData.sunset);
+    const sunsetY = (sunsetMin - START_HOUR * 60) * PIXELS_PER_MIN;
+
+    const sunsetLine = document.createElement("div");
+    sunsetLine.className = "sunset-line";
+    sunsetLine.style.top = `${sunsetY}px`;
+
+    const sunsetLabel = document.createElement("div");
+    sunsetLabel.className = "sunset-label";
+    sunsetLabel.textContent = `Sunset ${to12h(dayData.sunset)}`;
+
+    sunsetLine.appendChild(sunsetLabel);
+    row.appendChild(sunsetLine);
+
+    complexBlocks[complex].forEach(b => {
+      const startMin = timeToMinutes(b.start);
+      const endMin = timeToMinutes(b.end);
+
+      const top = (startMin - START_HOUR * 60) * PIXELS_PER_MIN;
+      const height = (endMin - startMin) * PIXELS_PER_MIN;
+
+      const div = document.createElement("div");
+      div.className = `timeline-block timeline-${b.type}`;
+      div.style.top = `${top}px`;
+      div.style.height = `${height}px`;
+
+      const time = document.createElement("div");
+      time.className = "block-time";
+      time.textContent = `${to12h(b.start)} - ${to12h(b.end)}`;
+
+      const main = document.createElement("div");
+      main.className = "block-main";
+      main.textContent = b.title || b.fieldName;
+
+      div.appendChild(time);
+      div.appendChild(main);
+
+      row.appendChild(div);
+    });
+
+    col.appendChild(row);
+    complexContainer.appendChild(col);
+  });
+
+  timeline.appendChild(complexContainer);
+  container.appendChild(timeline);
+}
+
+
+// ------------------------------------------------------------
+// MASTER RENDER SWITCH (UNIFIED VERSION)
+// ------------------------------------------------------------
+function renderCurrentViewUnified() {
+  const dateKey = formatDateKey(currentDate);
 
   if (VIEW_MODE === "day") {
-    renderTimeline();
-  } else {
-    renderWeekView();
+    renderDayViewUnified(dateKey);
+  } else if (VIEW_MODE === "week") {
+    renderWeekViewUnified(currentDate);
+  } else if (VIEW_MODE === "month") {
+    renderMonthViewUnified(currentDate);
+  } else if (VIEW_MODE === "search") {
+    renderSearchViewUnified();
   }
 }
+
+// ------------------------------------------------------------
+// INIT (UNIFIED VERSION)
+// ------------------------------------------------------------
+async function initCalendarUnified() {
+  await loadSearchIndex();
+  await loadAvailability();
+  renderCurrentViewUnified();
+}
+
+// If you want unified mode as default, uncomment:
+// document.addEventListener("DOMContentLoaded", initCalendarUnified);
+
+// ------------------------------------------------------------
+// FIELD SUMMARY UTILITIES
+// ------------------------------------------------------------
+
+// Summaries for quick debugging or UI enhancements
+function summarizeField(field) {
+  return {
+    id: field.id,
+    name: field.name,
+    free: field.free.length,
+    practice: field.practice.length,
+    games: field.games.length,
+    admin: field.admin.length
+  };
+}
+
+function summarizeDay(dayData) {
+  return dayData.fields.map(f => summarizeField(f));
+}
+
+function debugDaySummary(dateKey) {
+  const dayData = AVAIL[dateKey];
+  if (!dayData) {
+    console.log("No data for", dateKey);
+    return;
+  }
+  console.log("Summary for", dateKey, summarizeDay(dayData));
+}
+
+// ------------------------------------------------------------
+// COMPLEX SUMMARY UTILITIES
+// ------------------------------------------------------------
+function summarizeComplexBlocks(complexBlocks) {
+  const summary = {};
+
+  Object.keys(complexBlocks).forEach(complex => {
+    const blocks = complexBlocks[complex];
+
+    summary[complex] = {
+      free: blocks.filter(b => b.type === "free").length,
+      practice: blocks.filter(b => b.type === "practice").length,
+      games: blocks.filter(b => b.type === "game").length,
+      admin: blocks.filter(b => b.type === "admin").length
+    };
+  });
+
+  return summary;
+}
+
+function debugComplexSummary(dateKey) {
+  const dayData = AVAIL[dateKey];
+  if (!dayData) {
+    console.log("No data for", dateKey);
+    return;
+  }
+
+  const complexBlocks = buildUnifiedComplexBlocks(dayData);
+  console.log("Complex summary for", dateKey, summarizeComplexBlocks(complexBlocks));
+}
+
+// ------------------------------------------------------------
+// ADVANCED SEARCH UTILITIES
+// ------------------------------------------------------------
+
+// Search for games by team name
+function searchGamesByTeam(teamName) {
+  const results = [];
+
+  Object.keys(AVAIL).forEach(dateKey => {
+    const dayData = AVAIL[dateKey];
+
+    dayData.fields.forEach(field => {
+      field.games.forEach(g => {
+        if (
+          g.home.toLowerCase().includes(teamName.toLowerCase()) ||
+          g.away.toLowerCase().includes(teamName.toLowerCase())
+        ) {
+          results.push({
+            date: dateKey,
+            field: field.name,
+            home: g.home,
+            away: g.away,
+            start: g.start,
+            end: g.end
+          });
+        }
+      });
+    });
+  });
+
+  return results;
+}
+
+// Search for practice by team name
+function searchPracticeByTeam(teamName) {
+  const results = [];
+
+  Object.keys(AVAIL).forEach(dateKey => {
+    const dayData = AVAIL[dateKey];
+
+    dayData.fields.forEach(field => {
+      field.practice.forEach(p => {
+        if (p.team.toLowerCase().includes(teamName.toLowerCase())) {
+          results.push({
+            date: dateKey,
+            field: field.name,
+            team: p.team,
+            start: p.start,
+            end: p.end
+          });
+        }
+      });
+    });
+  });
+
+  return results;
+}
+
+// Search for admin blocks by reason
+function searchAdminByReason(reason) {
+  const results = [];
+
+  Object.keys(AVAIL).forEach(dateKey => {
+    const dayData = AVAIL[dateKey];
+
+    dayData.fields.forEach(field => {
+      field.admin.forEach(a => {
+        if (a.reason.toLowerCase().includes(reason.toLowerCase())) {
+          results.push({
+            date: dateKey,
+            field: field.name,
+            reason: a.reason,
+            start: a.start,
+            end: a.end
+          });
+        }
+      });
+    });
+  });
+
+  return results;
+}
+
+
+// ------------------------------------------------------------
+// MASTER RENDER SWITCH (UNIFIED VERSION)
+// ------------------------------------------------------------
+function renderCurrentViewUnified() {
+  const dateKey = formatDateKey(currentDate);
+
+  if (VIEW_MODE === "day") {
+    renderDayViewUnified(dateKey);
+  } else if (VIEW_MODE === "week") {
+    renderWeekViewUnified(currentDate);
+  } else if (VIEW_MODE === "month") {
+    renderMonthViewUnified(currentDate);
+  } else if (VIEW_MODE === "search") {
+    renderSearchViewUnified();
+  }
+}
+
+// ------------------------------------------------------------
+// INIT (UNIFIED VERSION)
+// ------------------------------------------------------------
+async function initCalendarUnified() {
+  await loadSearchIndex();
+  await loadAvailability();
+  renderCurrentViewUnified();
+}
+
+// If you want unified mode as default, uncomment:
+// document.addEventListener("DOMContentLoaded", initCalendarUnified);
+
+// ------------------------------------------------------------
+// FIELD SUMMARY UTILITIES
+// ------------------------------------------------------------
+
+// Summaries for quick debugging or UI enhancements
+function summarizeField(field) {
+  return {
+    id: field.id,
+    name: field.name,
+    free: field.free.length,
+    practice: field.practice.length,
+    games: field.games.length,
+    admin: field.admin.length
+  };
+}
+
+function summarizeDay(dayData) {
+  return dayData.fields.map(f => summarizeField(f));
+}
+
+function debugDaySummary(dateKey) {
+  const dayData = AVAIL[dateKey];
+  if (!dayData) {
+    console.log("No data for", dateKey);
+    return;
+  }
+  console.log("Summary for", dateKey, summarizeDay(dayData));
+}
+
+// ------------------------------------------------------------
+// COMPLEX SUMMARY UTILITIES
+// ------------------------------------------------------------
+function summarizeComplexBlocks(complexBlocks) {
+  const summary = {};
+
+  Object.keys(complexBlocks).forEach(complex => {
+    const blocks = complexBlocks[complex];
+
+    summary[complex] = {
+      free: blocks.filter(b => b.type === "free").length,
+      practice: blocks.filter(b => b.type === "practice").length,
+      games: blocks.filter(b => b.type === "game").length,
+      admin: blocks.filter(b => b.type === "admin").length
+    };
+  });
+
+  return summary;
+}
+
+function debugComplexSummary(dateKey) {
+  const dayData = AVAIL[dateKey];
+  if (!dayData) {
+    console.log("No data for", dateKey);
+    return;
+  }
+
+  const complexBlocks = buildUnifiedComplexBlocks(dayData);
+  console.log("Complex summary for", dateKey, summarizeComplexBlocks(complexBlocks));
+}
+
+// ------------------------------------------------------------
+// ADVANCED SEARCH UTILITIES
+// ------------------------------------------------------------
+
+// Search for games by team name
+function searchGamesByTeam(teamName) {
+  const results = [];
+
+  Object.keys(AVAIL).forEach(dateKey => {
+    const dayData = AVAIL[dateKey];
+
+    dayData.fields.forEach(field => {
+      field.games.forEach(g => {
+        if (
+          g.home.toLowerCase().includes(teamName.toLowerCase()) ||
+          g.away.toLowerCase().includes(teamName.toLowerCase())
+        ) {
+          results.push({
+            date: dateKey,
+            field: field.name,
+            home: g.home,
+            away: g.away,
+            start: g.start,
+            end: g.end
+          });
+        }
+      });
+    });
+  });
+
+  return results;
+}
+
+// Search for practice by team name
+function searchPracticeByTeam(teamName) {
+  const results = [];
+
+  Object.keys(AVAIL).forEach(dateKey => {
+    const dayData = AVAIL[dateKey];
+
+    dayData.fields.forEach(field => {
+      field.practice.forEach(p => {
+        if (p.team.toLowerCase().includes(teamName.toLowerCase())) {
+          results.push({
+            date: dateKey,
+            field: field.name,
+            team: p.team,
+            start: p.start,
+            end: p.end
+          });
+        }
+      });
+    });
+  });
+
+  return results;
+}
+
+// Search for admin blocks by reason
+function searchAdminByReason(reason) {
+  const results = [];
+
+  Object.keys(AVAIL).forEach(dateKey => {
+    const dayData = AVAIL[dateKey];
+
+    dayData.fields.forEach(field => {
+      field.admin.forEach(a => {
+        if (a.reason.toLowerCase().includes(reason.toLowerCase())) {
+          results.push({
+            date: dateKey,
+            field: field.name,
+            reason: a.reason,
+            start: a.start,
+            end: a.end
+          });
+        }
+      });
+    });
+  });
+
+  return results;
+}
+
+
+// ------------------------------------------------------------
+// ADVANCED TEAM SEARCH (UNIFIED)
+// ------------------------------------------------------------
+
+// Search all blocks (free, practice, game, admin) for a team
+function searchTeamAll(teamName) {
+  const results = [];
+
+  Object.keys(AVAIL).forEach(dateKey => {
+    const dayData = AVAIL[dateKey];
+    const complexBlocks = buildUnifiedComplexBlocks(dayData);
+
+    Object.keys(complexBlocks).forEach(complex => {
+      complexBlocks[complex].forEach(b => {
+        if (
+          (b.title && b.title.toLowerCase().includes(teamName.toLowerCase())) ||
+          (b.fieldName && b.fieldName.toLowerCase().includes(teamName.toLowerCase()))
+        ) {
+          results.push({
+            date: dateKey,
+            complex,
+            field: b.fieldName,
+            type: b.type,
+            title: b.title,
+            start: b.start,
+            end: b.end
+          });
+        }
+      });
+    });
+  });
+
+  return results;
+}
+
+// Search for fields by name
+function searchFieldsByName(name) {
+  const results = [];
+
+  Object.keys(AVAIL).forEach(dateKey => {
+    const dayData = AVAIL[dateKey];
+
+    dayData.fields.forEach(field => {
+      if (field.name.toLowerCase().includes(name.toLowerCase())) {
+        results.push({
+          date: dateKey,
+          field: field.name,
+          id: field.id
+        });
+      }
+    });
+  });
+
+  return results;
+}
+
+// Search for availability windows by time
+function searchAvailabilityByTime(timeHM) {
+  const targetMin = hmToMin(timeHM);
+  const results = [];
+
+  Object.keys(AVAIL).forEach(dateKey => {
+    const dayData = AVAIL[dateKey];
+    const dayAvail = buildDayAvailability(dayData);
+
+    dayData.fields.forEach(field => {
+      const avail = dayAvail[field.id];
+
+      avail.free.forEach(win => {
+        const s = hmToMin(win.start);
+        const e = hmToMin(win.end);
+
+        if (targetMin >= s && targetMin <= e) {
+          results.push({
+            date: dateKey,
+            field: field.name,
+            start: win.start,
+            end: win.end
+          });
+        }
+      });
+    });
+  });
+
+  return results;
+}
+
+// ------------------------------------------------------------
+// GLOBAL SEARCH DISPATCHER
+// ------------------------------------------------------------
+function globalSearch(query) {
+  const q = query.toLowerCase();
+
+  const results = [];
+
+  // Team search
+  const teamMatches = searchTeamAll(q);
+  results.push(...teamMatches.map(r => ({
+    type: "team",
+    ...r
+  })));
+
+  // Field search
+  const fieldMatches = searchFieldsByName(q);
+  results.push(...fieldMatches.map(r => ({
+    type: "field",
+    ...r
+  })));
+
+  // Time search (HH:MM)
+  if (/^\d{1,2}:\d{2}$/.test(q)) {
+    const timeMatches = searchAvailabilityByTime(q);
+    results.push(...timeMatches.map(r => ({
+      type: "time",
+      ...r
+    })));
+  }
+
+  return results;
+}
+
+// ------------------------------------------------------------
+// SEARCH VIEW (GLOBAL SEARCH VERSION)
+// ------------------------------------------------------------
+function renderSearchViewGlobal() {
+  const container = document.getElementById("view-container");
+  container.innerHTML = "";
+
+  const header = document.createElement("div");
+  header.className = "view-header";
+
+  const modeToggle = document.createElement("div");
+  modeToggle.className = "view-mode-toggle";
+
+  ["day", "week", "month", "search"].forEach(mode => {
+    const btn = document.createElement("button");
+    btn.className = "mode-btn" + (VIEW_MODE === mode ? " active" : "");
+    btn.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+    btn.onclick = () => {
+      VIEW_MODE = mode;
+      renderCurrentView();
+    };
+    modeToggle.appendChild(btn);
+  });
+
+  header.appendChild(modeToggle);
+  container.appendChild(header);
+
+  const searchBox = document.createElement("input");
+  searchBox.type = "text";
+  searchBox.placeholder = "Search teams, fields, games, times...";
+  searchBox.className = "search-box";
+
+  const results = document.createElement("div");
+  results.className = "search-results";
+
+  searchBox.oninput = () => {
+    const q = searchBox.value;
+    results.innerHTML = "";
+
+    if (!q) return;
+
+    const matches = globalSearch(q);
+
+    matches.forEach(m => {
+      const div = document.createElement("div");
+      div.className = "search-item";
+
+      let label = "";
+
+      if (m.type === "team") {
+        label = `[Team] ${m.title || m.field} — ${m.date} ${m.start}-${m.end}`;
+      } else if (m.type === "field") {
+        label = `[Field] ${m.field} — ${m.date}`;
+      } else if (m.type === "time") {
+        label = `[Available] ${m.field} — ${m.date} ${m.start}-${m.end}`;
+      }
+
+      div.textContent = label;
+
+      div.onclick = () => {
+        currentDate = new Date(m.date);
+        VIEW_MODE = "day";
+        renderCurrentView();
+      };
+
+      results.appendChild(div);
+    });
+  };
+
+  container.appendChild(searchBox);
+  container.appendChild(results);
+}
+
+
+// ------------------------------------------------------------
+// EXPORT UTILITIES (OPTIONAL)
+// ------------------------------------------------------------
+
+// Export daily availability as JSON
+function exportDayJSON(dateKey) {
+  const dayData = AVAIL[dateKey];
+  if (!dayData) {
+    console.log("No data for", dateKey);
+    return;
+  }
+
+  const unified = buildUnifiedComplexBlocks(dayData);
+  const json = JSON.stringify(unified, null, 2);
+
+  console.log("Export for", dateKey, json);
+  return json;
+}
+
+// Export weekly availability as JSON
+function exportWeekJSON(startDate) {
+  const monday = getMondayOfWeek(startDate);
+  const days = [];
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    days.push(formatDateKey(d));
+  }
+
+  const result = {};
+
+  days.forEach(dateKey => {
+    const dayData = AVAIL[dateKey];
+    if (!dayData) return;
+
+    result[dateKey] = buildUnifiedComplexBlocks(dayData);
+  });
+
+  const json = JSON.stringify(result, null, 2);
+  console.log("Weekly export:", json);
+  return json;
+}
+
+// Export monthly availability as JSON
+function exportMonthJSON(date) {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const result = {};
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateKey = formatDateKey(new Date(year, month, d));
+    const dayData = AVAIL[dateKey];
+    if (!dayData) continue;
+
+    result[dateKey] = buildUnifiedComplexBlocks(dayData);
+  }
+
+  const json = JSON.stringify(result, null, 2);
+  console.log("Monthly export:", json);
+  return json;
+}
+
+// ------------------------------------------------------------
+// UI HELPERS
+// ------------------------------------------------------------
+
+// Smooth scroll to top
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+// Highlight today's date in month view
+function highlightTodayInMonth() {
+  const todayKey = formatDateKey(new Date());
+  const cells = document.querySelectorAll(".month-cell");
+
+  cells.forEach(cell => {
+    const num = cell.querySelector(".month-day-number");
+    if (!num) return;
+
+    const d = Number(num.textContent);
+    const cellDate = formatDateKey(new Date(currentDate.getFullYear(), currentDate.getMonth(), d));
+
+    if (cellDate === todayKey) {
+      cell.classList.add("today");
+    }
+  });
+}
+
+// Highlight current time in day/week view
+function highlightCurrentTime() {
+  const now = new Date();
+  const min = now.getHours() * 60 + now.getMinutes();
+  const y = (min - START_HOUR * 60) * PIXELS_PER_MIN;
+
+  const line = document.createElement("div");
+  line.className = "current-time-line";
+  line.style.top = `${y}px`;
+
+  const timelines = document.querySelectorAll(".complex-row, .week-complex-column");
+  timelines.forEach(t => t.appendChild(line.cloneNode(true)));
+}
+
+// ------------------------------------------------------------
+// LIVE REFRESH (OPTIONAL)
+// ------------------------------------------------------------
+
+// Auto-refresh every X minutes
+let autoRefreshInterval = null;
+
+function startAutoRefresh(minutes = 5) {
+  if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+
+  autoRefreshInterval = setInterval(async () => {
+    await loadAvailability();
+    renderCurrentView();
+  }, minutes * 60 * 1000);
+}
+
+function stopAutoRefresh() {
+  if (autoRefreshInterval) {
+    clearInterval(autoRefreshInterval);
+    autoRefreshInterval = null;
+  }
+}
+
+// ------------------------------------------------------------
+// ADVANCED DEBUGGING PANEL
+// ------------------------------------------------------------
+
+function renderDebugPanel() {
+  const panel = document.createElement("div");
+  panel.id = "debugPanel";
+
+  panel.innerHTML = `
+    <h3>Debug Tools</h3>
+    <button id="dbg-summary">Day Summary</button>
+    <button id="dbg-complex">Complex Summary</button>
+    <button id="dbg-field">Field Blocks</button>
+    <button id="dbg-avail">Field Availability</button>
+    <button id="dbg-export-day">Export Day JSON</button>
+    <button id="dbg-export-week">Export Week JSON</button>
+    <button id="dbg-export-month">Export Month JSON</button>
+  `;
+
+  document.body.appendChild(panel);
+
+  document.getElementById("dbg-summary").onclick = () => {
+    const dk = formatDateKey(currentDate);
+    debugDaySummary(dk);
+  };
+
+  document.getElementById("dbg-complex").onclick = () => {
+    const dk = formatDateKey(currentDate);
+    debugComplexSummary(dk);
+  };
+
+  document.getElementById("dbg-field").onclick = () => {
+    const dk = formatDateKey(currentDate);
+    const id = prompt("Field ID?");
+    debugField(dk, id);
+  };
+
+  document.getElementById("dbg-avail").onclick = () => {
+    const dk = formatDateKey(currentDate);
+    const id = prompt("Field ID?");
+    debugFieldAvailability(dk, id);
+  };
+
+  document.getElementById("dbg-export-day").onclick = () => {
+    const dk = formatDateKey(currentDate);
+    exportDayJSON(dk);
+  };
+
+  document.getElementById("dbg-export-week").onclick = () => {
+    exportWeekJSON(currentDate);
+  };
+
+  document.getElementById("dbg-export-month").onclick = () => {
+    exportMonthJSON(currentDate);
+  };
+}
+
+
+// ------------------------------------------------------------
+// INLINE HELP OVERLAY (OPTIONAL)
+// ------------------------------------------------------------
+function renderHelpOverlay() {
+  const overlay = document.createElement("div");
+  overlay.id = "helpOverlay";
+
+  overlay.innerHTML = `
+    <div class="help-content">
+      <h2>Calendar Help</h2>
+      <p>This scheduling tool shows:</p>
+      <ul>
+        <li>Field availability</li>
+        <li>Practices</li>
+        <li>Games</li>
+        <li>Admin blocks</li>
+        <li>Sunset times</li>
+      </ul>
+      <p>You can switch between Day, Week, Month, and Search views.</p>
+      <button id="helpClose">Close</button>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  document.getElementById("helpClose").onclick = () => {
+    overlay.remove();
+  };
+}
+
+// ------------------------------------------------------------
+// KEYBOARD SHORTCUTS (OPTIONAL)
+// ------------------------------------------------------------
+function enableKeyboardShortcuts() {
+  document.addEventListener("keydown", e => {
+    if (e.key === "ArrowLeft") {
+      if (VIEW_MODE === "day") currentDate.setDate(currentDate.getDate() - 1);
+      if (VIEW_MODE === "week") currentDate.setDate(currentDate.getDate() - 7);
+      if (VIEW_MODE === "month") currentDate.setMonth(currentDate.getMonth() - 1);
+      renderCurrentView();
+    }
+
+    if (e.key === "ArrowRight") {
+      if (VIEW_MODE === "day") currentDate.setDate(currentDate.getDate() + 1);
+      if (VIEW_MODE === "week") currentDate.setDate(currentDate.getDate() + 7);
+      if (VIEW_MODE === "month") currentDate.setMonth(currentDate.getMonth() + 1);
+      renderCurrentView();
+    }
+
+    if (e.key === "t") {
+      currentDate = new Date();
+      renderCurrentView();
+    }
+
+    if (e.key === "?") {
+      renderHelpOverlay();
+    }
+  });
+}
+
+// ------------------------------------------------------------
+// STYLE INJECTION (OPTIONAL)
+// ------------------------------------------------------------
+function injectDynamicStyles() {
+  const style = document.createElement("style");
+  style.textContent = `
+    #helpOverlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+    .help-content {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      width: 400px;
+      text-align: center;
+    }
+    .current-time-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: red;
+      z-index: 10;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+// ------------------------------------------------------------
+// FINAL INIT HOOKS
+// ------------------------------------------------------------
+function enableAllEnhancements() {
+  enableKeyboardShortcuts();
+  injectDynamicStyles();
+  renderDebugPanel();
+}
+
+// Call this after initCalendar() or initCalendarUnified()
+// Example:
+// document.addEventListener("DOMContentLoaded", () => {
+//   initCalendarUnified();
+//   enableAllEnhancements();
+// });
+
+
