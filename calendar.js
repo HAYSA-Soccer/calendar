@@ -1,10 +1,10 @@
-// calendar.js — v7 (cleaned + optimized)
+// calendar.js — v8 (multi-select filters + sunset + 2h grid)
 
 // ---- GLOBAL STATE ----
 let SEARCH = null;
 let AVAIL = null;
 
-let FILTER_COMPLEX = "all";
+let FILTER_COMPLEXES = new Set(); // multi-select
 let VIEW_MODE = "week"; // default to week view
 let currentDate = new Date();
 let LAST_UPDATED = null;
@@ -12,7 +12,8 @@ let LAST_UPDATED = null;
 // ---- TIME CONSTANTS ----
 const START_HOUR = 8;
 const END_HOUR = 21;
-const PIXELS_PER_MIN = 1;
+const PIXELS_PER_MIN = 0.5; // compact height
+const GRID_INTERVAL_MIN = 120; // 2 hours
 
 // ---- LOAD JSON ----
 async function loadSearchIndex() {
@@ -236,7 +237,6 @@ function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
       const startStr = `${String(START_HOUR).padStart(2, "0")}:00`;
       const endStr = `${String(END_HOUR).padStart(2, "0")}:00`;
       fullAvail = [{ start: startStr, end: endStr }];
-
       const trueAvail = fullAvail;
 
       blocks = trueAvail.map(win => ({
@@ -361,7 +361,7 @@ function assignEventLanes(slice) {
   };
 }
 
-// ---- FILTER BAR (LOCATION BUTTONS ONLY) ----
+// ---- FILTER BAR (multi-select) ----
 function renderFilters(fields, FIELD_COMPLEX_MAP) {
   const filterDiv = document.getElementById("filter-bar");
   filterDiv.innerHTML = "";
@@ -370,30 +370,65 @@ function renderFilters(fields, FIELD_COMPLEX_MAP) {
     fields.map(f => FIELD_COMPLEX_MAP[f.id]).filter(Boolean)
   )];
 
+  // Initialize filter set if empty: all selected
+  if (FILTER_COMPLEXES.size === 0) {
+    locations.forEach(loc => FILTER_COMPLEXES.add(loc));
+  }
+
   const locContainer = document.createElement("div");
   locContainer.className = "filter-button-group";
-
-  const allBtn = document.createElement("button");
-  allBtn.textContent = "All Locations";
-  allBtn.className = FILTER_COMPLEX === "all" ? "filter-btn active" : "filter-btn";
-  allBtn.onclick = () => {
-    FILTER_COMPLEX = "all";
-    render();
-  };
-  locContainer.appendChild(allBtn);
 
   locations.forEach(loc => {
     const btn = document.createElement("button");
     btn.textContent = loc;
-    btn.className = FILTER_COMPLEX === loc ? "filter-btn active" : "filter-btn";
+    const isActive = FILTER_COMPLEXES.has(loc);
+    btn.className = isActive ? "filter-btn active" : "filter-btn";
     btn.onclick = () => {
-      FILTER_COMPLEX = loc;
+      if (FILTER_COMPLEXES.has(loc)) {
+        FILTER_COMPLEXES.delete(loc);
+      } else {
+        FILTER_COMPLEXES.add(loc);
+      }
+      // If user deselects everything, reselect all to avoid empty screen
+      if (FILTER_COMPLEXES.size === 0) {
+        locations.forEach(l => FILTER_COMPLEXES.add(l));
+      }
       render();
     };
     locContainer.appendChild(btn);
   });
 
   filterDiv.appendChild(locContainer);
+}
+
+// ---- GRID LINES + SUNSET (shared) ----
+function renderTimeGridLines(container) {
+  const totalMinutes = (END_HOUR - START_HOUR) * 60;
+  for (let m = 0; m <= totalMinutes; m += GRID_INTERVAL_MIN) {
+    const top = m * PIXELS_PER_MIN;
+    const line = document.createElement("div");
+    line.className = "time-grid-line";
+    line.style.top = `${top}px`;
+    container.appendChild(line);
+  }
+}
+
+function renderSunsetLine(container, dayData) {
+  if (!dayData || !dayData.sunset) return;
+  const sunsetMin = timeToMinutes(dayData.sunset) - START_HOUR * 60;
+  if (sunsetMin < 0 || sunsetMin > (END_HOUR - START_HOUR) * 60) return;
+
+  const top = sunsetMin * PIXELS_PER_MIN;
+  const line = document.createElement("div");
+  line.className = "sunset-line";
+  line.style.top = `${top}px`;
+
+  const label = document.createElement("div");
+  label.className = "sunset-label";
+  label.textContent = `Sunset ${to12h(dayData.sunset)}`;
+
+  line.appendChild(label);
+  container.appendChild(line);
 }
 
 // ---- DAY VIEW: SINGLE DATE, COMPLEXES SIDE-BY-SIDE ----
@@ -431,6 +466,7 @@ function renderDayTimelineForDate(dateObj, container) {
     };
   });
 
+  // Time labels
   for (let h = START_HOUR; h <= END_HOUR; h++) {
     const top = (h - START_HOUR) * 60 * PIXELS_PER_MIN;
     const label = document.createElement("div");
@@ -439,6 +475,10 @@ function renderDayTimelineForDate(dateObj, container) {
     label.textContent = to12h(`${String(h).padStart(2, "0")}:00`);
     timeCol.appendChild(label);
   }
+
+  // Grid lines + sunset
+  renderTimeGridLines(complexWrapper);
+  renderSunsetLine(complexWrapper, dayData);
 
   const legend = document.createElement("div");
   legend.className = "timeline-legend";
@@ -468,7 +508,7 @@ function renderDayTimelineForDate(dateObj, container) {
   complexWrapper.appendChild(complexRowContainer);
 
   Object.keys(complexes).forEach(loc => {
-    if (FILTER_COMPLEX !== "all" && FILTER_COMPLEX !== loc) return;
+    if (!FILTER_COMPLEXES.has(loc)) return;
 
     const complexFields = complexes[loc];
     if (complexFields.length === 0) return;
@@ -496,6 +536,9 @@ function renderDayTimelineForDate(dateObj, container) {
     complexContainer.appendChild(complexRow);
 
     const slices = buildComplexSlices(complexFields, dayData, FIELD_MAP);
+
+    // Skip empty complexes
+    if (slices.length === 0) return;
 
     slices.forEach(slice => {
       const startMin = timeToMinutes(slice.start) - START_HOUR * 60;
@@ -540,12 +583,14 @@ function renderDayTimelineForDate(dateObj, container) {
         blockDiv.style.left = `${ev._lane * laneWidthPercent}%`;
         blockDiv.style.width = `${laneWidthPercent}%`;
 
-        const label = ev.title || ev.status.toUpperCase();
+        const labelFull = ev.title || ev.status.toUpperCase();
+        const shortLabel = labelFull.split("(")[0].trim();
+
         blockDiv.innerHTML = `
           <div class="block-time">${to12h(slice.start)} – ${to12h(slice.end)}</div>
-          <div class="block-main">${label}</div>
+          <div class="block-main">${shortLabel}</div>
         `;
-        blockDiv.title = `${label} — ${ev.label}`;
+        blockDiv.title = `${labelFull} — ${ev.label}`;
 
         complexRow.appendChild(blockDiv);
       });
@@ -573,6 +618,7 @@ function renderWeekView() {
   const timeCol = weekContainer.querySelector(".timeline-times");
   const daysContainer = weekContainer.querySelector(".week-days-container");
 
+  // Time labels
   for (let h = START_HOUR; h <= END_HOUR; h++) {
     const top = (h - START_HOUR) * 60 * PIXELS_PER_MIN;
     const label = document.createElement("div");
@@ -643,32 +689,30 @@ function renderWeekDayColumn(dateObj, container) {
     complexes[loc].push(f);
   });
 
-  const locKeys = Object.keys(complexes).filter(loc => {
-    if (FILTER_COMPLEX === "all") return true;
-    return FILTER_COMPLEX === loc;
-  });
+  const locKeys = Object.keys(complexes).filter(loc => FILTER_COMPLEXES.has(loc));
 
   if (locKeys.length === 0) {
-    container.innerHTML = `<p class="no-data">No fields for this location.</p>`;
+    container.innerHTML = `<p class="no-data">No fields for selected locations.</p>`;
     return;
   }
 
   container.style.display = "flex";
   container.style.flexDirection = "row";
   container.style.gap = "8px";
+  container.style.position = "relative";
+
+  // Grid lines + sunset
+  renderTimeGridLines(container);
+  renderSunsetLine(container, dayData);
 
   locKeys.forEach(loc => {
     const complexFields = complexes[loc];
 
     const complexCol = document.createElement("div");
     complexCol.className = "week-complex-column";
-    complexCol.style.flex = "1 1 0";
+    complexCol.dataset.loc = loc;
 
     const header = document.createElement("div");
-    header.style.fontSize = "12px";
-    header.style.fontWeight = "600";
-    header.style.marginBottom = "4px";
-    header.style.color = "#1f3b5b";
     header.textContent = loc;
 
     const toggleBtn = document.createElement("button");
@@ -689,6 +733,9 @@ function renderWeekDayColumn(dateObj, container) {
 
     const slices = buildComplexSlices(complexFields, dayData, FIELD_MAP);
 
+    // Skip empty complexes
+    if (slices.length === 0) return;
+
     slices.forEach(slice => {
       const startMin = timeToMinutes(slice.start) - START_HOUR * 60;
       const endMin = timeToMinutes(slice.end) - START_HOUR * 60;
@@ -708,8 +755,8 @@ function renderWeekDayColumn(dateObj, container) {
         const blockDiv = document.createElement("div");
         blockDiv.className = "timeline-block timeline-free";
 
-        blockDiv.style.top = `${startMin}px`;
-        blockDiv.style.height = `${endMin - startMin}px`;
+        blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
+        blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
         blockDiv.style.left = `${laneCount * laneWidthPercent}%`;
         blockDiv.style.width = `${laneWidthPercent}%`;
 
@@ -726,17 +773,19 @@ function renderWeekDayColumn(dateObj, container) {
         const blockDiv = document.createElement("div");
         blockDiv.className = `timeline-block timeline-${classifyColor(ev)}`;
 
-        blockDiv.style.top = `${startMin}px`;
-        blockDiv.style.height = `${endMin - startMin}px`;
+        blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
+        blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
         blockDiv.style.left = `${ev._lane * laneWidthPercent}%`;
         blockDiv.style.width = `${laneWidthPercent}%`;
 
-        const mainLabel = ev.title || ev.status.toUpperCase();
+        const labelFull = ev.title || ev.status.toUpperCase();
+        const shortLabel = labelFull.split("(")[0].trim();
+
         blockDiv.innerHTML = `
           <div class="block-time">${to12h(slice.start)} – ${to12h(slice.end)}</div>
-          <div class="block-main">${mainLabel}</div>
+          <div class="block-main">${shortLabel}</div>
         `;
-        blockDiv.title = `${mainLabel} — ${ev.label}`;
+        blockDiv.title = `${labelFull} — ${ev.label}`;
 
         inner.appendChild(blockDiv);
       });
@@ -811,6 +860,23 @@ function render() {
     currentDate = new Date();
     render();
   };
+
+  // For filters, we need fields from current day/week
+  if (AVAIL && AVAIL.days) {
+    const dayData = AVAIL.days[formatDateKey(currentDate)];
+    if (dayData) {
+      const FIELD_COMPLEX_MAP = buildFieldComplexMapForDay(dayData);
+      renderFilters(dayData.fields, FIELD_COMPLEX_MAP);
+    } else {
+      // fallback: use first available day
+      const keys = Object.keys(AVAIL.days);
+      if (keys.length > 0) {
+        const anyDay = AVAIL.days[keys[0]];
+        const FIELD_COMPLEX_MAP = buildFieldComplexMapForDay(anyDay);
+        renderFilters(anyDay.fields, FIELD_COMPLEX_MAP);
+      }
+    }
+  }
 
   if (VIEW_MODE === "day") {
     renderTimeline();
