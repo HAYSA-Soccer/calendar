@@ -370,7 +370,6 @@ body {
   display: flex;
   flex-direction: row;
   position: relative;
-  height: calc((21 - 8) * 60px * 0.5);
   padding: 4px;
   gap: 6px;
 }
@@ -395,21 +394,21 @@ body {
   margin-bottom: 4px;
 }
 
-/* Colored borders per complex (example mapping) */
+/* Colored borders per complex */
 
-.week-complex-column[data-loc="Turf"] {
+.week-complex-column[data-loc="Holbrook HS Turf"] {
   border-left: 4px solid #4caf50;
 }
 
-.week-complex-column[data-loc="Sumner/Sean Joyce"] {
+.week-complex-column[data-loc="Sumner / Sean Joyce Fields"] {
   border-left: 4px solid #2196f3;
 }
 
-.week-complex-column[data-loc="Brookville"] {
+.week-complex-column[data-loc="Brookville Fields"] {
   border-left: 4px solid #ff9800;
 }
 
-.week-complex-column[data-loc="Butler"] {
+.week-complex-column[data-loc="Avon Butler Fields"] {
   border-left: 4px solid #9c27b0;
 }
 
