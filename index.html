@@ -2,24 +2,31 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>HAYSA Calendar</title>
-  <link rel="stylesheet" href="calendar.css?v=5">
+  <title>Test Calendar</title>
+  <link rel="stylesheet" href="calendar.css?v=2">
 </head>
 <body>
 
   <header class="app-header">
-    <div class="app-header-inner">
-      <h1 class="app-title">HAYSA Calendar</h1>
+    <h1>Test Calendar</h1>
 
-      <nav class="nav">
-        <button id="dayModeBtn" class="mode-btn">Day</button>
-        <button id="weekModeBtn" class="mode-btn">Week</button>
-      </nav>
-    </div>
+    <nav class="nav">
+      <button data-view="day">Day</button>
+      <button data-view="week">Week</button>
+      <button data-view="month">Month</button>
+      <button data-view="search">Search</button>
+    </nav>
   </header>
 
   <main id="view-container"></main>
 
-  <script src="calendar.js?v=5"></script>
+  <!-- Day timeline -->
+  <div id="dayTimeline" class="timeline-container"></div>
+
+  <!-- Week timeline (horizontal) -->
+  <div id="weekTimeline" class="timeline-container"></div>
+
+  <script src="calendar.js?v=2"></script>
+
 </body>
 </html>
