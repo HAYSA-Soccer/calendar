@@ -555,7 +555,7 @@
             "event_id": "b21c3e6823c235955118285522acbcb2",
             "date": "2026-10-13",
             "start": "17:00",
-            "end": "18:30",
+            "end": "18:00",
             "field": "H-Su1A",
             "field_group": "SUMNER/SEAN JOYCE",
             "type": "practice",
@@ -656,9 +656,9 @@
         {
           "field": "H-Su1A",
           "start": "17:00",
-          "end": "18:30",
+          "end": "18:00",
           "start_12": "5:00 PM",
-          "end_12": "6:30 PM",
+          "end_12": "6:00 PM",
           "type": "practice",
           "title": "3/4 Girls Travel (Lamb-Williams) Practice",
           "team": "3/4 Girls Travel",
@@ -780,7 +780,6 @@
             "end_12": "6:30 PM",
             "fields": [
               "H-Su2",
-              "H-Su1A",
               "H-SJ4A"
             ]
           },
@@ -3843,7 +3842,7 @@
             "event_id": "b21c3e6823c235955118285522acbcb2",
             "date": "2026-10-13",
             "start": "17:00",
-            "end": "18:30",
+            "end": "18:00",
             "field": "H-Su1A",
             "field_group": "SUMNER/SEAN JOYCE",
             "type": "practice",
@@ -3944,9 +3943,9 @@
         {
           "field": "H-Su1A",
           "start": "17:00",
-          "end": "18:30",
+          "end": "18:00",
           "start_12": "5:00 PM",
-          "end_12": "6:30 PM",
+          "end_12": "6:00 PM",
           "type": "practice",
           "title": "3/4 Girls Travel (Lamb-Williams) Practice",
           "team": "3/4 Girls Travel",
@@ -4068,7 +4067,6 @@
             "end_12": "6:30 PM",
             "fields": [
               "H-Su2",
-              "H-Su1A",
               "H-SJ4A"
             ]
           },
@@ -7132,7 +7130,7 @@
             "event_id": "b21c3e6823c235955118285522acbcb2",
             "date": "2026-10-13",
             "start": "17:00",
-            "end": "18:30",
+            "end": "18:00",
             "field": "H-Su1A",
             "field_group": "SUMNER/SEAN JOYCE",
             "type": "practice",
@@ -7233,9 +7231,9 @@
         {
           "field": "H-Su1A",
           "start": "17:00",
-          "end": "18:30",
+          "end": "18:00",
           "start_12": "5:00 PM",
-          "end_12": "6:30 PM",
+          "end_12": "6:00 PM",
           "type": "practice",
           "title": "3/4 Girls Travel (Lamb-Williams) Practice",
           "team": "3/4 Girls Travel",
@@ -7357,7 +7355,6 @@
             "end_12": "6:30 PM",
             "fields": [
               "H-Su2",
-              "H-Su1A",
               "H-SJ4A"
             ]
           },
