@@ -1,6 +1,6 @@
-/* ============================================================
-   GLOBAL RESET & BASE
-   ============================================================ */
+/* --------------------------------------------------
+   Base layout
+-------------------------------------------------- */
 
 * {
   box-sizing: border-box;
@@ -8,188 +8,160 @@
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  background: #f5f6f7;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f5f7fa;
   color: #222;
 }
 
-h1 {
+/* Header */
+
+.app-header {
+  background: #1f3b5b;
+  color: #fff;
+  padding: 12px 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+}
+
+.app-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.app-title {
   margin: 0;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 600;
 }
 
-.main-container {
-  padding: 16px 20px;
-}
-
-/* ============================================================
-   HEADER + NAVIGATION
-   ============================================================ */
-
-.app-header {
-  background: #ffffff;
-  border-bottom: 1px solid #dcdcdc;
-  padding: 16px 20px;
-  text-align: center;
-}
+/* Top nav buttons */
 
 .nav {
-  margin-top: 12px;
   display: flex;
-  justify-content: center;
-  gap: 10px;
+  gap: 8px;
 }
 
-.nav button {
-  padding: 10px 18px;
-  font-size: 15px;
-  border-radius: 6px;
-  border: 1px solid #c8c8c8;
-  background: #f8f8f8;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.nav button:hover {
-  background: #e9e9e9;
-}
-
-.nav button.active {
-  background: #007bff;
+.mode-btn {
+  border: none;
+  padding: 8px 14px;
+  border-radius: 4px;
+  background: #2f4f7f;
   color: #fff;
-  border-color: #007bff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.05s;
 }
 
-/* ============================================================
-   VIEW HEADER + NAV BUTTONS
-   ============================================================ */
+.mode-btn.active {
+  background: #f0c040;
+  color: #1f3b5b;
+  font-weight: 600;
+}
+
+.mode-btn:hover {
+  background: #3b5f90;
+}
+
+.mode-btn:active {
+  transform: translateY(1px);
+}
+
+/* Main container */
+
+#view-container {
+  max-width: 1100px;
+  margin: 16px auto;
+  padding: 12px 16px 24px;
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+
+/* View header (mode + period + nav) */
 
 .view-header {
   display: flex;
-  justify-content: center;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 12px;
+}
+
+.view-mode-toggle {
+  display: flex;
+  gap: 6px;
 }
 
 .controls {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 12px;
-  background: #ffffff;
-  border-radius: 8px;
-  padding: 8px 14px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  gap: 8px;
 }
 
 .nav-btn {
+  border: none;
   padding: 6px 10px;
-  border-radius: 6px;
-  border: 1px solid #c8c8c8;
-  background: #f8f8f8;
+  border-radius: 4px;
+  background: #e3e7ee;
+  color: #333;
+  font-size: 14px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s, transform 0.05s;
 }
 
 .nav-btn:hover {
-  background: #e9e9e9;
+  background: #d3d8e2;
+}
+
+.nav-btn:active {
+  transform: translateY(1px);
 }
 
 .period-label {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
 }
 
-/* ============================================================
-   FILTER BAR
-   ============================================================ */
+/* Filter bar */
 
 .filter-bar {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .filter-button-group {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .filter-btn {
-  padding: 6px 12px;
+  border: 1px solid #ccd2dd;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: #f7f9fc;
+  color: #333;
   font-size: 13px;
-  border-radius: 6px;
-  border: 1px solid #c8c8c8;
-  background: #f8f8f8;
   cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.filter-btn:hover {
-  background: #e9e9e9;
+  transition: background 0.15s, border-color 0.15s;
 }
 
 .filter-btn.active {
-  background: #007bff;
+  background: #1f3b5b;
   color: #fff;
-  border-color: #007bff;
+  border-color: #1f3b5b;
 }
 
-/* ============================================================
-   TIMELINE SHARED ELEMENTS
-   ============================================================ */
-
-.timeline-container {
-  margin-top: 10px;
-  position: relative;
+.filter-btn:hover {
+  background: #e3e7ee;
 }
 
-.time-label {
-  position: absolute;
-  left: 0;
-  width: 70px;
-  text-align: right;
-  padding-right: 10px;
-  font-size: 12px;
-  color: #666;
-}
+/* Legend */
 
-/* Blocks (events, availability, admin) */
-.timeline-block {
-  position: absolute;
-  padding: 6px;
-  font-size: 12px;
-  border-radius: 6px;
-  overflow: hidden;
-  white-space: normal;
-  word-wrap: break-word;
-  line-height: 1.3;
-  border: 1px solid transparent;
-}
-
-/* Colors */
-.timeline-free {
-  background: #dff7df;
-  border-color: #9cd49c;
-}
-
-.timeline-practice {
-  background: #c6e8c6;
-  border-color: #7fbe7f;
-}
-
-.timeline-game {
-  background: #d6e3ff;
-  border-color: #8aa6e8;
-}
-
-.timeline-admin {
-  background: #ffd6d6;
-  border-color: #e89a9a;
-}
-
-/* Legend (day view) */
 .timeline-legend {
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-bottom: 8px;
   font-size: 12px;
 }
@@ -198,6 +170,9 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #f3f5f9;
 }
 
 .legend-free::before,
@@ -208,147 +183,226 @@ h1 {
   display: inline-block;
   width: 10px;
   height: 10px;
-  border-radius: 3px;
+  border-radius: 2px;
 }
 
-.legend-free::before { background: #dff7df; }
-.legend-practice::before { background: #c6e8c6; }
-.legend-game::before { background: #d6e3ff; }
-.legend-admin::before { background: #ffd6d6; }
+.legend-free::before {
+  background: #c8f7c5;
+}
 
-/* ============================================================
-   DAY VIEW (vertical)
-   ============================================================ */
+.legend-practice::before {
+  background: #a0e0a0;
+}
+
+.legend-game::before {
+  background: #a8c8ff;
+}
+
+.legend-admin::before {
+  background: #ffb3b3;
+}
+
+/* Shared timeline container */
+
+.timeline-container {
+  display: flex;
+  flex-direction: row;
+  margin-top: 8px;
+}
+
+/* Time ruler column */
+
+.timeline-times {
+  width: 80px;
+  position: relative;
+  border-right: 1px solid #d0d5e0;
+}
+
+.time-label {
+  position: absolute;
+  font-size: 11px;
+  color: #555;
+}
+
+/* --------------------------------------------------
+   DAY VIEW (complexes side-by-side)
+-------------------------------------------------- */
 
 #dayTimeline {
-  display: none;
-  padding-left: 80px;
-}
-
-#dayTimeline .timeline-times {
-  position: absolute;
-  left: 0;
-  width: 80px;
-}
-
-.timeline-complexes {
-  margin-left: 80px;
-}
-
-.complex-column {
-  background: #fff;
-  border: 1px solid #ddd;
-  margin-bottom: 20px;
-  padding: 8px;
-  border-radius: 6px;
-}
-
-.complex-column h3 {
-  margin: 0 0 6px 0;
-  font-size: 13px;
-}
-
-.complex-row {
-  position: relative;
-  background: #ffffff;
-  border-radius: 4px;
-}
-
-/* ============================================================
-   WEEK VIEW (horizontal)
-   ============================================================ */
-
-#weekTimeline {
-  display: none;
+  display: flex;
   flex-direction: row;
 }
 
-/* Left time column */
+#dayTimeline .timeline-times {
+  /* left column already styled above */
+}
+
+.day-complexes {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  padding-left: 12px;
+  overflow-x: auto;
+}
+
+/* Each complex column in day view */
+
+.complex-column {
+  flex: 1;
+  min-width: 220px;
+  border-radius: 4px;
+  border: 1px solid #d0d5e0;
+  background: #fafbff;
+  padding: 6px 6px 10px;
+  position: relative;
+}
+
+.complex-column h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f3b5b;
+}
+
+/* Vertical lane area per complex */
+
+.complex-row {
+  position: relative;
+  margin-top: 4px;
+}
+
+/* --------------------------------------------------
+   WEEK VIEW (horizontal, complexes side-by-side)
+-------------------------------------------------- */
+
+#weekTimeline {
+  display: flex;
+  flex-direction: row;
+  margin-top: 10px;
+}
+
 #weekTimeline .timeline-times {
   width: 80px;
   position: relative;
 }
 
-/* Container for 7 day columns */
 .week-days-container {
   display: flex;
   flex-direction: row;
   flex: 1;
   overflow-x: auto;
   background: #fff;
-  border-left: 1px solid #ccc;
+  border-left: 1px solid #d0d5e0;
 }
 
 /* Each day column */
+
 .week-day-column {
   flex: 1;
   min-width: 260px;
-  border-right: 2px solid #e2e2e2;
-  background: #fafafa;
-  border-radius: 4px;
-  margin-right: 12px;
+  margin-right: 14px;
+  border-right: 3px solid #e0e4ef;
   position: relative;
+  background: #fafbff;
+  border-radius: 4px;
+  overflow: hidden;
 }
 
-/* Today highlight */
 .week-day-column.today {
   background: #fff8d6;
-  border: 2px solid #f0c040;
+  box-shadow: 0 0 0 2px #f0c040 inset;
 }
 
-/* Day header */
 .week-day-header {
   text-align: center;
-  padding: 10px;
-  background: #f0f0f0;
-  border-bottom: 1px solid #ccc;
+  padding: 6px;
+  background: #e9edf7;
+  border-bottom: 1px solid #d0d5e0;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 /* Complexes side-by-side inside each day */
+
 .week-day-timeline {
   display: flex;
   flex-direction: row;
   position: relative;
-  height: calc((21 - 8) * 60px); /* 8am–9pm */
-  background: #fff;
-  border-radius: 4px;
+  height: calc((21 - 8) * 60px);
+  padding: 4px 6px 8px;
+  gap: 10px;
 }
 
 /* Each complex column inside a day */
+
 .week-complex-column {
   flex: 1;
   min-width: 180px;
-  border-right: 1px solid #e0e0e0;
+  border-radius: 4px;
+  border: 1px solid #d0d5e0;
+  background: #f7f9fc;
   position: relative;
-  padding: 4px;
 }
 
-/* Complex label */
-.week-complex-column strong {
-  display: block;
-  font-size: 12px;
-  margin-bottom: 4px;
-  color: #444;
+/* --------------------------------------------------
+   Blocks (shared)
+-------------------------------------------------- */
+
+.timeline-block {
+  position: absolute;
+  padding: 4px 5px;
+  font-size: 11px;
+  border-radius: 4px;
+  overflow: hidden;
+  color: #000;
+  white-space: normal;
+  word-wrap: break-word;
+  line-height: 1.3;
 }
 
-/* ============================================================
-   NO DATA
-   ============================================================ */
+/* Colors */
+
+.timeline-free {
+  background: #c8f7c5;
+  border: 1px solid #8ac78a;
+}
+
+.timeline-practice {
+  background: #a0e0a0;
+  border: 1px solid #6bbf6b;
+}
+
+.timeline-game {
+  background: #a8c8ff;
+  border: 1px solid #6a8bd9;
+}
+
+.timeline-admin {
+  background: #ffb3b3;
+  border: 1px solid #d97a7a;
+}
+
+/* Misc */
 
 .no-data {
-  padding: 12px;
+  font-size: 12px;
   color: #777;
-  font-style: italic;
-  text-align: center;
+  padding: 6px;
 }
 
-/* ============================================================
-   RESPONSIVE
-   ============================================================ */
+.hidden {
+  display: none;
+}
+
+/* Responsive */
 
 @media (max-width: 768px) {
+  #view-container {
+    margin: 8px;
+    padding: 10px 12px 18px;
+  }
+
   .week-day-column {
     min-width: 220px;
   }
@@ -357,8 +411,7 @@ h1 {
     min-width: 160px;
   }
 
-  .nav button {
-    padding: 8px 12px;
-    font-size: 14px;
+  .complex-column {
+    min-width: 200px;
   }
 }
