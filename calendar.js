@@ -1313,6 +1313,7 @@ function buildUnifiedComplexBlocks(dayData) {
 }
 
 
+
 // ------------------------------------------------------------
 // WEEK VIEW (ADVANCED VERSION USING UNIFIED BLOCKS)
 // ------------------------------------------------------------
