@@ -1,4 +1,5 @@
-// calendar.js — clean UI, day + week views, complexes side-by-side, filters, no hard-coded dates
+// calendar.js — clean UI, day + week views, complexes side-by-side, filters, today button,
+// merged availability slices, collapse toggles, equal-width columns, improved palette
 
 let SEARCH = null;
 let AVAIL = null;
@@ -198,8 +199,8 @@ function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
       });
     });
 
-    // Fallback: if no availability and no usage, treat as fully available for the day
-    if (fullAvail.length === 0 && halfUsage.length === 0) {
+    // Fallback: if no availability, treat as fully available
+    if (fullAvail.length === 0) {
       const startStr = `${String(START_HOUR).padStart(2, "0")}:00`;
       const endStr = `${String(END_HOUR).padStart(2, "0")}:00`;
       fullAvail = [{ start: startStr, end: endStr }];
@@ -440,6 +441,16 @@ function renderDayTimelineForDate(dateObj, container) {
 
     const complexHeader = document.createElement("h3");
     complexHeader.textContent = loc;
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.textContent = "▼";
+    toggleBtn.className = "complex-toggle";
+    toggleBtn.onclick = () => {
+      complexRow.style.display =
+        complexRow.style.display === "none" ? "block" : "none";
+    };
+    complexHeader.appendChild(toggleBtn);
+
     complexContainer.appendChild(complexHeader);
 
     const complexRow = document.createElement("div");
@@ -465,23 +476,22 @@ function renderDayTimelineForDate(dateObj, container) {
         const freeLabels = allSame
           ? freeFields[0].label
           : freeFields.map(f => f.label).join(", ");
-      
+
         const blockDiv = document.createElement("div");
         blockDiv.className = "timeline-block timeline-free";
-      
+
         blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
         blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
         blockDiv.style.left = `${laneCount * laneWidthPercent}%`;
         blockDiv.style.width = `${laneWidthPercent}%`;
-      
+
         blockDiv.innerHTML = `
           <strong>Available:</strong><br>
           ${freeLabels}
         `;
-      
+
         complexRow.appendChild(blockDiv);
       }
-
 
       // Event lanes (practice = green, game = blue, admin = red)
       events.forEach(ev => {
@@ -600,7 +610,7 @@ function renderWeekDayColumn(dateObj, container) {
     complexes[loc].push(f);
   });
 
-  // Filter complexes (A with ability to remove certain complexes)
+  // Filter complexes
   const locKeys = Object.keys(complexes).filter(loc => {
     if (FILTER_COMPLEX === "all") return true;
     return FILTER_COMPLEX === loc;
@@ -616,7 +626,30 @@ function renderWeekDayColumn(dateObj, container) {
 
     const complexCol = document.createElement("div");
     complexCol.className = "week-complex-column";
-    container.appendChild(complexCol);
+
+    // Collapse toggle
+    const header = document.createElement("div");
+    header.style.fontSize = "12px";
+    header.style.fontWeight = "600";
+    header.style.marginBottom = "4px";
+    header.style.color = "#1f3b5b";
+    header.textContent = loc;
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.textContent = "▼";
+    toggleBtn.className = "complex-toggle";
+    toggleBtn.onclick = () => {
+      inner.style.display =
+        inner.style.display === "none" ? "block" : "none";
+    };
+    header.appendChild(toggleBtn);
+
+    complexCol.appendChild(header);
+
+    const inner = document.createElement("div");
+    inner.style.position = "relative";
+    inner.style.height = `${(END_HOUR - START_HOUR) * 60 * PIXELS_PER_MIN}px`;
+    complexCol.appendChild(inner);
 
     const slices = buildComplexSlices(complexFields, dayData, FIELD_MAP);
 
@@ -636,31 +669,30 @@ function renderWeekDayColumn(dateObj, container) {
         const freeLabels = allSame
           ? freeFields[0].label
           : freeFields.map(f => f.label).join(", ");
-      
+
         const blockDiv = document.createElement("div");
         blockDiv.className = "timeline-block timeline-free";
-      
+
         blockDiv.style.top = `${startMin}px`;
         blockDiv.style.height = `${endMin - startMin}px`;
         blockDiv.style.left = `${laneCount * laneWidthPercent}%`;
         blockDiv.style.width = `${laneWidthPercent}%`;
-      
+
         blockDiv.innerHTML = `
           <strong>Available:</strong><br>
           ${freeLabels}
         `;
-      
-        complexCol.appendChild(blockDiv);
-      }
 
+        inner.appendChild(blockDiv);
+      }
 
       // Events
       events.forEach(ev => {
         const blockDiv = document.createElement("div");
         blockDiv.className = `timeline-block timeline-${classifyColor(ev)}`;
 
-        blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
-        blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
+        blockDiv.style.top = `${startMin}px`;
+        blockDiv.style.height = `${endMin - startMin}px`;
         blockDiv.style.left = `${ev._lane * laneWidthPercent}%`;
         blockDiv.style.width = `${laneWidthPercent}%`;
 
@@ -670,9 +702,11 @@ function renderWeekDayColumn(dateObj, container) {
           ${ev.label}
         `;
 
-        complexCol.appendChild(blockDiv);
+        inner.appendChild(blockDiv);
       });
     });
+
+    container.appendChild(complexCol);
   });
 }
 
@@ -706,6 +740,7 @@ function render() {
       </div>
       <div class="controls">
         <button id="prevPeriod" class="nav-btn">←</button>
+        <button id="todayBtn" class="nav-btn">Today</button>
         <span class="period-label">
           ${VIEW_MODE === "day" ? humanDate : `Week of ${weekLabel}`}
         </span>
@@ -729,20 +764,18 @@ function render() {
 
   // Navigation (day vs week)
   document.getElementById("prevPeriod").onclick = () => {
-    if (VIEW_MODE === "day") {
-      currentDate.setDate(currentDate.getDate() - 1);
-    } else {
-      currentDate.setDate(currentDate.getDate() - 7);
-    }
+    currentDate.setDate(currentDate.getDate() + (VIEW_MODE === "day" ? -1 : -7));
     render();
   };
 
   document.getElementById("nextPeriod").onclick = () => {
-    if (VIEW_MODE === "day") {
-      currentDate.setDate(currentDate.getDate() + 1);
-    } else {
-      currentDate.setDate(currentDate.getDate() + 7);
-    }
+    currentDate.setDate(currentDate.getDate() + (VIEW_MODE === "day" ? 1 : 7));
+    render();
+  };
+
+  // Today button
+  document.getElementById("todayBtn").onclick = () => {
+    currentDate = new Date();
     render();
   };
 
@@ -753,3 +786,5 @@ function render() {
     renderWeekView();
   }
 }
+
+  
