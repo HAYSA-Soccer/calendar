@@ -2,12 +2,12 @@
 
 let SEARCH = null;
 let AVAIL = null;
- 
+
 // Filters
 let FILTER_COMPLEX = "all";
 
 // View mode: "day" or "week"
-let VIEW_MODE = "day";
+let VIEW_MODE = "week"; // default to week view
 
 // Time constants (fallback when backend doesn't provide windows)
 const START_HOUR = 8;
@@ -367,7 +367,7 @@ function renderDayTimelineForDate(dateObj, container) {
   const complexCol = container.querySelector(".timeline-complexes");
 
   if (!AVAIL || !AVAIL.days || !AVAIL.days[dateKey]) {
-    complexCol.innerHTML = `<p>No availability for this date.</p>`;
+    complexCol.innerHTML = `<p class="no-data">No availability for this date.</p>`;
     return;
   }
 
@@ -376,10 +376,7 @@ function renderDayTimelineForDate(dateObj, container) {
 
   const FIELD_COMPLEX_MAP = buildFieldComplexMapForDay(dayData);
 
-  // Filters only in Day View container
-  if (container.id === "dayTimeline") {
-    renderFilters(fields, FIELD_COMPLEX_MAP);
-  }
+  renderFilters(fields, FIELD_COMPLEX_MAP);
 
   const FIELD_MAP = {};
   fields.forEach(f => {
@@ -491,10 +488,10 @@ function renderDayTimelineForDate(dateObj, container) {
 
         complexRow.appendChild(blockDiv);
       });
-    }); // END slices.forEach
+    });
 
     complexCol.appendChild(complexContainer);
-  }); // END Object.keys(complexes).forEach
+  });
 }
 
 // ---- DAY VIEW TIMELINE WRAPPER ----
@@ -588,12 +585,23 @@ function renderWeekDayColumn(dateObj, container) {
     complexes[loc].push(f);
   });
 
-  // Render ALL complexes side-by-side
-  Object.keys(complexes).forEach(loc => {
+  // Option C: show ALL complexes side-by-side, but filter can hide some
+  const locKeys = Object.keys(complexes).filter(loc => {
+    if (FILTER_COMPLEX === "all") return true;
+    return FILTER_COMPLEX === loc;
+  });
+
+  if (locKeys.length === 0) {
+    container.innerHTML = `<p class="no-data">No fields for this location.</p>`;
+    return;
+  }
+
+  locKeys.forEach(loc => {
     const complexFields = complexes[loc];
 
     const complexCol = document.createElement("div");
     complexCol.className = "week-complex-column";
+    complexCol.innerHTML = `<strong>${loc}</strong>`;
     container.appendChild(complexCol);
 
     const slices = buildComplexSlices(complexFields, dayData, FIELD_MAP);
@@ -648,124 +656,39 @@ function renderWeekDayColumn(dateObj, container) {
   });
 }
 
-
-function renderWeekDayColumn(dateObj, container) {
-  const dateKey = formatDateKey(dateObj);
-
-  if (!AVAIL || !AVAIL.days || !AVAIL.days[dateKey]) {
-    container.innerHTML = `<p class="no-data">No availability.</p>`;
-    return;
-  }
-
-  const dayData = AVAIL.days[dateKey];
-  const fields = dayData.fields;
-
-  const FIELD_COMPLEX_MAP = buildFieldComplexMapForDay(dayData);
-
-  const FIELD_MAP = {};
-  fields.forEach(f => {
-    FIELD_MAP[f.id] = {
-      id: f.id,
-      parent: f.name,
-      type: f.complex,
-      surface: f.surface,
-      location: FIELD_COMPLEX_MAP[f.id] || null
-    };
-  });
-
-  // Group fields by location
-  const complexes = {};
-  fields.forEach(f => {
-    const loc = FIELD_COMPLEX_MAP[f.id];
-    if (!loc) return;
-    if (!complexes[loc]) complexes[loc] = [];
-    complexes[loc].push(f);
-  });
-
-  // If a specific complex is selected, only show that one
-  const locKeys = Object.keys(complexes).filter(loc => {
-    if (FILTER_COMPLEX === "all") return true;
-    return FILTER_COMPLEX === loc;
-  });
-
-  if (locKeys.length === 0) {
-    container.innerHTML = `<p class="no-data">No fields for this location.</p>`;
-    return;
-  }
-
-  // For weekly view, we show ONE complex per day column (first matching)
-  const loc = locKeys[0];
-  const complexFields = complexes[loc];
-
-  const complexRow = document.createElement("div");
-  complexRow.className = "complex-row";
-  complexRow.style.height = `${(END_HOUR - START_HOUR) * 60 * PIXELS_PER_MIN}px`;
-  container.appendChild(complexRow);
-
-  const slices = buildComplexSlices(complexFields, dayData, FIELD_MAP);
-
-  slices.forEach(slice => {
-    const startMin = timeToMinutes(slice.start) - START_HOUR * 60;
-    const endMin = timeToMinutes(slice.end) - START_HOUR * 60;
-
-    const { events, freeFields, laneCount } = assignEventLanes(slice);
-
-    const hasAvailabilityLane = freeFields.length > 0;
-    const totalLanes = laneCount + (hasAvailabilityLane ? 1 : 0);
-    const laneWidthPercent = 100 / totalLanes;
-
-    // Availability lane (green)
-    if (hasAvailabilityLane) {
-      const blockDiv = document.createElement("div");
-      blockDiv.className = "timeline-block timeline-free";
-
-      blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
-      blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
-      blockDiv.style.left = `${laneCount * laneWidthPercent}%`;
-      blockDiv.style.width = `${laneWidthPercent}%`;
-
-      const freeLabels = freeFields.map(f => f.label).join(", ");
-      blockDiv.innerHTML = `
-        <strong>Available:</strong><br>
-        ${freeLabels}
-      `;
-
-      complexRow.appendChild(blockDiv);
-    }
-
-    // Event lanes (practice = green, game = blue, admin = red)
-    events.forEach(ev => {
-      const blockDiv = document.createElement("div");
-
-      const colorType = classifyColor(ev);
-      blockDiv.className = `timeline-block timeline-${colorType}`;
-
-      blockDiv.style.top = `${startMin * PIXELS_PER_MIN}px`;
-      blockDiv.style.height = `${(endMin - startMin) * PIXELS_PER_MIN}px`;
-      blockDiv.style.left = `${ev._lane * laneWidthPercent}%`;
-      blockDiv.style.width = `${laneWidthPercent}%`;
-
-      const label = ev.title || ev.status.toUpperCase();
-      blockDiv.innerHTML = `
-        ${to12h(slice.start)} – ${to12h(slice.end)}<br>
-        ${label} — ${ev.label}
-      `;
-
-      complexRow.appendChild(blockDiv);
-    });
-  });
-}
-
 // ---- INIT ----
 document.addEventListener("DOMContentLoaded", async () => {
   await loadAvailability();
   await loadSearchIndex();
+
+  // Wire header nav buttons
+  const dayBtn = document.getElementById("dayModeBtn");
+  const weekBtn = document.getElementById("weekModeBtn");
+
+  dayBtn.onclick = () => {
+    VIEW_MODE = "day";
+    dayBtn.classList.add("active");
+    weekBtn.classList.remove("active");
+    render();
+  };
+
+  weekBtn.onclick = () => {
+    VIEW_MODE = "week";
+    weekBtn.classList.add("active");
+    dayBtn.classList.remove("active");
+    render();
+  };
+
+  // Default to week view with today highlighted
+  weekBtn.classList.add("active");
   render();
 });
 
 // ---- MAIN RENDER ----
 function render() {
-  const container = document.getElementById("view-container");
+  const dayTimeline = document.getElementById("dayTimeline");
+  const weekTimeline = document.getElementById("weekTimeline");
+  const periodLabelEl = document.getElementById("periodLabel");
 
   const dateKey = formatDateKey(currentDate);
   const humanDate = formatHumanDate(dateKey);
@@ -778,34 +701,8 @@ function render() {
 
   const weekLabel = `${formatShortDate(mondayKey)} – ${formatShortDate(sundayKey)}`;
 
-  container.innerHTML = `
-    <div class="view-header">
-      <div class="view-mode-toggle">
-        <button id="dayModeBtn" class="${VIEW_MODE === "day" ? "mode-btn active" : "mode-btn"}">Day</button>
-        <button id="weekModeBtn" class="${VIEW_MODE === "week" ? "mode-btn active" : "mode-btn"}">Week</button>
-      </div>
-      <div class="controls">
-        <button id="prevPeriod" class="nav-btn">←</button>
-        <span class="period-label">
-          ${VIEW_MODE === "day" ? humanDate : `Week of ${weekLabel}`}
-        </span>
-        <button id="nextPeriod" class="nav-btn">→</button>
-      </div>
-    </div>
-    <div id="filter-bar" class="filter-bar"></div>
-    <div id="dayTimeline" class="${VIEW_MODE === "day" ? "" : "hidden"}"></div>
-    <div id="weekTimeline" class="${VIEW_MODE === "week" ? "" : "hidden"}"></div>
-  `;
-
-  // Mode toggle
-  document.getElementById("dayModeBtn").onclick = () => {
-    VIEW_MODE = "day";
-    render();
-  };
-  document.getElementById("weekModeBtn").onclick = () => {
-    VIEW_MODE = "week";
-    render();
-  };
+  periodLabelEl.textContent =
+    VIEW_MODE === "day" ? humanDate : `Week of ${weekLabel}`;
 
   // Navigation (day vs week)
   document.getElementById("prevPeriod").onclick = () => {
@@ -826,10 +723,25 @@ function render() {
     render();
   };
 
-  // Render appropriate view
   if (VIEW_MODE === "day") {
+    dayTimeline.style.display = "block";
+    weekTimeline.style.display = "none";
     renderTimeline();
   } else {
+    dayTimeline.style.display = "none";
+    weekTimeline.style.display = "flex";
+
+    // For week view, filters depend on fields of current week’s days.
+    // We’ll build filters from today’s day data if available.
+    const todayKey = formatDateKey(currentDate);
+    const dayData = AVAIL && AVAIL.days && AVAIL.days[todayKey] ? AVAIL.days[todayKey] : null;
+    if (dayData) {
+      const FIELD_COMPLEX_MAP = buildFieldComplexMapForDay(dayData);
+      renderFilters(dayData.fields, FIELD_COMPLEX_MAP);
+    } else {
+      document.getElementById("filter-bar").innerHTML = "";
+    }
+
     renderWeekView();
   }
 }
