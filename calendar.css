@@ -19,6 +19,10 @@ h1 {
   font-weight: 600;
 }
 
+.main-container {
+  padding: 16px 20px;
+}
+
 /* ============================================================
    HEADER + NAVIGATION
    ============================================================ */
@@ -58,11 +62,83 @@ h1 {
 }
 
 /* ============================================================
+   VIEW HEADER + NAV BUTTONS
+   ============================================================ */
+
+.view-header {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 8px 14px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.nav-btn {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #c8c8c8;
+  background: #f8f8f8;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.nav-btn:hover {
+  background: #e9e9e9;
+}
+
+.period-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* ============================================================
+   FILTER BAR
+   ============================================================ */
+
+.filter-bar {
+  margin-bottom: 12px;
+}
+
+.filter-button-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: 1px solid #c8c8c8;
+  background: #f8f8f8;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.filter-btn:hover {
+  background: #e9e9e9;
+}
+
+.filter-btn.active {
+  background: #007bff;
+  color: #fff;
+  border-color: #007bff;
+}
+
+/* ============================================================
    TIMELINE SHARED ELEMENTS
    ============================================================ */
 
 .timeline-container {
-  margin: 20px;
+  margin-top: 10px;
   position: relative;
 }
 
@@ -110,6 +186,36 @@ h1 {
   border-color: #e89a9a;
 }
 
+/* Legend (day view) */
+.timeline-legend {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.legend-free::before,
+.legend-practice::before,
+.legend-game::before,
+.legend-admin::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.legend-free::before { background: #dff7df; }
+.legend-practice::before { background: #c6e8c6; }
+.legend-game::before { background: #d6e3ff; }
+.legend-admin::before { background: #ffd6d6; }
+
 /* ============================================================
    DAY VIEW (vertical)
    ============================================================ */
@@ -125,17 +231,27 @@ h1 {
   width: 80px;
 }
 
-.day-complex-container {
+.timeline-complexes {
   margin-left: 80px;
 }
 
-.day-complex-column {
+.complex-column {
   background: #fff;
   border: 1px solid #ddd;
   margin-bottom: 20px;
   padding: 8px;
   border-radius: 6px;
+}
+
+.complex-column h3 {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+}
+
+.complex-row {
   position: relative;
+  background: #ffffff;
+  border-radius: 4px;
 }
 
 /* ============================================================
@@ -145,7 +261,6 @@ h1 {
 #weekTimeline {
   display: none;
   flex-direction: row;
-  gap: 0;
 }
 
 /* Left time column */
