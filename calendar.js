@@ -1261,32 +1261,46 @@ function buildUnifiedBlocks(dayData) {
 }
 
 
-// Build unified complex blocks
+// ------------------------------------------------------------
+// BUILD UNIFIED COMPLEX BLOCKS (PATCHED FOR YOUR JSON FORMAT)
+// ------------------------------------------------------------
 function buildUnifiedComplexBlocks(dayData) {
+  const unified = {};
+  const blocks = buildUnifiedBlocks(dayData); // blocks = { fieldId: [ ... ] }
+
+  // Build complex groups
   const complexMap = buildFieldComplexMapForDay(dayData);
-  const dayAvail = buildDayAvailability(dayData);
-
-  const result = {};
-
   Object.values(complexMap).forEach(c => {
-    result[c] = [];
+    unified[c] = [];
   });
 
-  dayData.fields.forEach(field => {
-    const complex = complexMap[field.id];
-    const avail = dayAvail[field.id];
-    const blocks = buildUnifiedBlocks(avail, field);
+  // Iterate over each field's block list
+  Object.keys(blocks).forEach(fieldId => {
+    const fieldBlockList = blocks[fieldId];
 
-    blocks.forEach(b => {
-      result[complex].push({
-        ...b,
-        fieldId: field.id
+    // Ensure it's always an array
+    if (!Array.isArray(fieldBlockList)) return;
+
+    const complex = complexMap[fieldId] || "unknown";
+
+    fieldBlockList.forEach(block => {
+      unified[complex].push({
+        fieldId: fieldId,
+        start: block.start,
+        end: block.end,
+        type: block.type,
+        title: block.title || "",
+        team: block.team || "",
+        coach: block.coach || "",
+        grade: block.grade || "",
+        source: block.source || ""
       });
     });
   });
 
-  return result;
+  return unified;
 }
+
 
 // ------------------------------------------------------------
 // WEEK VIEW (ADVANCED VERSION USING UNIFIED BLOCKS)
