@@ -1,4 +1,4 @@
-// calendar.js — location filters, interwoven availability + events
+// calendar.js — location filters, interwoven availability + events, day + week views
 
 let SEARCH = null;
 let AVAIL = null;
@@ -6,7 +6,10 @@ let AVAIL = null;
 // Filters
 let FILTER_COMPLEX = "all";
 
-// Time constants
+// View mode: "day" or "week"
+let VIEW_MODE = "day";
+
+// Time constants (used as fallback when backend doesn't provide windows)
 const START_HOUR = 8;
 const END_HOUR = 21;
 const PIXELS_PER_MIN = 1;
@@ -39,6 +42,24 @@ function formatHumanDate(dateStr) {
     month: "long",
     day: "numeric"
   });
+}
+
+function formatShortDate(dateStr) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "numeric",
+    day: "numeric"
+  });
+}
+
+function getMondayOfWeek(date) {
+  const d = new Date(date);
+  const day = d.getDay(); // 0 = Sun, 1 = Mon, ...
+  const diff = (day === 0 ? -6 : 1 - day); // move to Monday
+  d.setDate(d.getDate() + diff);
+  return d;
 }
 
 // ---- TIME HELPERS ----
@@ -147,7 +168,6 @@ function mergeSameTimeBlocks(blocks) {
   return merged;
 }
 
-
 function classifyColor(ev) {
   const s = ev.status;
 
@@ -158,17 +178,13 @@ function classifyColor(ev) {
   return "admin";                         // red
 }
 
-
-
-
-
 // ---- BUILD BLOCKS FOR A FIELD ----
 function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
   const type = FIELD_MAP[fieldId].type;
   let blocks = [];
 
   if (type === "full") {
-    const fullAvail = dayData.availability[fieldId] || [];
+    let fullAvail = dayData.availability[fieldId] || [];
 
     const halfFields = dayData.fields.filter(f =>
       f.name === fieldId && f.complex === "half"
@@ -181,6 +197,13 @@ function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
         halfUsage.push({ start: ev.start, end: ev.end });
       });
     });
+
+    // ⭐ Fallback: if no availability and no usage, treat as fully available for the day
+    if (fullAvail.length === 0 && halfUsage.length === 0) {
+      const startStr = `${String(START_HOUR).padStart(2, "0")}:00`;
+      const endStr = `${String(END_HOUR).padStart(2, "0")}:00`;
+      fullAvail = [{ start: startStr, end: endStr }];
+    }
 
     const trueAvail = subtractUsage(fullAvail, halfUsage);
 
@@ -331,18 +354,17 @@ function renderFilters(fields, FIELD_COMPLEX_MAP) {
   filterDiv.appendChild(locContainer);
 }
 
-// ---- TIMELINE RENDER ----
-function renderTimeline() {
-  const tl = document.getElementById("dayTimeline");
-  const dateKey = formatDateKey(currentDate);
+// ---- CORE TIMELINE RENDER FOR A SINGLE DAY ----
+function renderDayTimelineForDate(dateObj, container) {
+  const dateKey = formatDateKey(dateObj);
 
-  tl.innerHTML = `
+  container.innerHTML = `
     <div class="timeline-times"></div>
     <div class="timeline-complexes"></div>
   `;
 
-  const timeCol = tl.querySelector(".timeline-times");
-  const complexCol = tl.querySelector(".timeline-complexes");
+  const timeCol = container.querySelector(".timeline-times");
+  const complexCol = container.querySelector(".timeline-complexes");
 
   if (!AVAIL || !AVAIL.days || !AVAIL.days[dateKey]) {
     complexCol.innerHTML = `<p>No availability for this date.</p>`;
@@ -354,7 +376,10 @@ function renderTimeline() {
 
   const FIELD_COMPLEX_MAP = buildFieldComplexMapForDay(dayData);
 
-  renderFilters(fields, FIELD_COMPLEX_MAP);
+  // Only render filters once (for the main view container)
+  if (container.id === "dayTimeline") {
+    renderFilters(fields, FIELD_COMPLEX_MAP);
+  }
 
   const FIELD_MAP = {};
   fields.forEach(f => {
@@ -470,8 +495,56 @@ function renderTimeline() {
 
     complexCol.appendChild(complexContainer);
   }); // END Object.keys(complexes).forEach
-} // END renderTimeline
+}
 
+// ---- DAY VIEW TIMELINE WRAPPER ----
+function renderTimeline() {
+  const tl = document.getElementById("dayTimeline");
+  renderDayTimelineForDate(currentDate, tl);
+}
+
+// ---- WEEK VIEW RENDER ----
+function renderWeekView() {
+  const weekContainer = document.getElementById("weekTimeline");
+  weekContainer.innerHTML = "";
+
+  const monday = getMondayOfWeek(currentDate);
+
+  for (let i = 0; i < 7; i++) {
+    const day = new Date(monday);
+    day.setDate(monday.getDate() + i);
+    const dateKey = formatDateKey(day);
+    const humanShort = formatShortDate(dateKey);
+
+    const daySection = document.createElement("div");
+    daySection.className = "week-day-section";
+
+    const header = document.createElement("div");
+    header.className = "week-day-header";
+    header.textContent = humanShort;
+    daySection.appendChild(header);
+
+    const timeline = document.createElement("div");
+    timeline.className = "week-day-timeline";
+    timeline.style.position = "relative";
+    timeline.style.height = `${(END_HOUR - START_HOUR) * 60 * PIXELS_PER_MIN}px`;
+
+    // Give each day its own internal timeline structure
+    const inner = document.createElement("div");
+    inner.className = "dayTimelineInner";
+    inner.innerHTML = `
+      <div class="timeline-times"></div>
+      <div class="timeline-complexes"></div>
+    `;
+    timeline.appendChild(inner);
+
+    daySection.appendChild(timeline);
+    weekContainer.appendChild(daySection);
+
+    // Render using the same engine as Day View
+    renderDayTimelineForDate(day, inner);
+  }
+}
 
 // ---- INIT ----
 document.addEventListener("DOMContentLoaded", async () => {
@@ -487,26 +560,66 @@ function render() {
   const dateKey = formatDateKey(currentDate);
   const humanDate = formatHumanDate(dateKey);
 
+  const monday = getMondayOfWeek(currentDate);
+  const mondayKey = formatDateKey(monday);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const sundayKey = formatDateKey(sunday);
+
+  const weekLabel = `${formatShortDate(mondayKey)} – ${formatShortDate(sundayKey)}`;
+
   container.innerHTML = `
-    <h2>Day View</h2>
-    <div id="filter-bar" class="filter-bar"></div>
-    <div class="controls">
-      <button id="prevDay">←</button>
-      <span class="day-date">${humanDate}</span>
-      <button id="nextDay">→</button>
+    <div class="view-header">
+      <div class="view-mode-toggle">
+        <button id="dayModeBtn" class="${VIEW_MODE === "day" ? "mode-btn active" : "mode-btn"}">Day</button>
+        <button id="weekModeBtn" class="${VIEW_MODE === "week" ? "mode-btn active" : "mode-btn"}">Week</button>
+      </div>
+      <div class="controls">
+        <button id="prevPeriod" class="nav-btn">←</button>
+        <span class="period-label">
+          ${VIEW_MODE === "day" ? humanDate : `Week of ${weekLabel}`}
+        </span>
+        <button id="nextPeriod" class="nav-btn">→</button>
+      </div>
     </div>
-    <div id="dayTimeline"></div>
+    <div id="filter-bar" class="filter-bar"></div>
+    <div id="dayTimeline" class="${VIEW_MODE === "day" ? "" : "hidden"}"></div>
+    <div id="weekTimeline" class="${VIEW_MODE === "week" ? "" : "hidden"}"></div>
   `;
 
-  document.getElementById("prevDay").onclick = () => {
-    currentDate.setDate(currentDate.getDate() - 1);
+  // Mode toggle
+  document.getElementById("dayModeBtn").onclick = () => {
+    VIEW_MODE = "day";
+    render();
+  };
+  document.getElementById("weekModeBtn").onclick = () => {
+    VIEW_MODE = "week";
     render();
   };
 
-  document.getElementById("nextDay").onclick = () => {
-    currentDate.setDate(currentDate.getDate() + 1);
+  // Navigation (fixed, larger buttons via CSS)
+  document.getElementById("prevPeriod").onclick = () => {
+    if (VIEW_MODE === "day") {
+      currentDate.setDate(currentDate.getDate() - 1);
+    } else {
+      currentDate.setDate(currentDate.getDate() - 7);
+    }
     render();
   };
 
-  renderTimeline();
+  document.getElementById("nextPeriod").onclick = () => {
+    if (VIEW_MODE === "day") {
+      currentDate.setDate(currentDate.getDate() + 1);
+    } else {
+      currentDate.setDate(currentDate.getDate() + 7);
+    }
+    render();
+  };
+
+  // Render appropriate view
+  if (VIEW_MODE === "day") {
+    renderTimeline();
+  } else {
+    renderWeekView();
+  }
 }
