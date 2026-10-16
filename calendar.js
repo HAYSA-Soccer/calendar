@@ -24,20 +24,54 @@ async function loadSearchIndex() {
 }
 
 async function loadAvailability() {
-  const resp = await fetch("data/availability.json");
-  AVAIL = await resp.json();
+  try {
+    const res = await fetch("data/availability.json");
+    if (!res.ok) {
+      console.error("Failed to fetch availability.json", res.status);
+      return;
+    }
 
-  LAST_UPDATED = new Date().toLocaleString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit"
-  });
+    const data = await res.json();
 
-  const el = document.getElementById("lastUpdated");
-  if (el) el.textContent = `Last updated: ${LAST_UPDATED}`;
+    // Expected JSON shape:
+    // {
+    //   "lastUpdated": "...",
+    //   "days": [
+    //     {
+    //       "date": "2026-10-12",   // MUST be YYYY-MM-DD
+    //       "sunset": "18:10",
+    //       "fields": [ ... ]
+    //     },
+    //     ...
+    //   ]
+    // }
+
+    AVAIL = {};
+
+    if (Array.isArray(data.days)) {
+      data.days.forEach(day => {
+        const dateKey = day.date; // "YYYY-MM-DD"
+
+        AVAIL[dateKey] = {
+          sunset: day.sunset,
+          fields: day.fields || []
+        };
+      });
+    } else {
+      console.error("availability.json missing 'days' array");
+    }
+
+    const stamp = document.getElementById("lastUpdated");
+    if (stamp && data.lastUpdated) {
+      stamp.textContent = `Last updated: ${data.lastUpdated}`;
+    }
+
+    console.log("Availability loaded. Keys:", Object.keys(AVAIL));
+  } catch (err) {
+    console.error("Error loading availability.json", err);
+  }
 }
+
 
 // ---- DATE HELPERS ----
 function formatDateKey(d) {
@@ -1045,7 +1079,7 @@ async function initCalendar() {
   renderCurrentView();
 }
 
-document.addEventListener("DOMContentLoaded", initCalendar);
+// document.addEventListener("DOMContentLoaded", initCalendar);
 
 // ------------------------------------------------------------
 // EXTRA UTILITIES (GRID, SUNSET, BLOCKS)
@@ -2634,11 +2668,10 @@ function enableAllEnhancements() {
   renderDebugPanel();
 }
 
-// Call this after initCalendar() or initCalendarUnified()
-// Example:
-// document.addEventListener("DOMContentLoaded", () => {
-//   initCalendarUnified();
-//   enableAllEnhancements();
-// });
-
-
+// ------------------------------------------------------------
+// INITIALIZE THE UNIFIED CALENDAR ENGINE
+// ------------------------------------------------------------
+document.addEventListener("DOMContentLoaded", () => {
+  initCalendarUnified();
+  enableAllEnhancements();
+});
