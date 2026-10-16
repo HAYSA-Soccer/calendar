@@ -1,17 +1,17 @@
-// calendar.js — v6
+// calendar.js — v7 (full rewrite)
 // Clean UI, day + week views, complexes side-by-side, filters, today button,
-// merged availability slices, equal-width columns, improved palette, turf availability fix.
+// merged availability slices, equal-width columns, improved palette,
+// correct turf availability (full vs half), proper text wrapping.
 
+// ---- GLOBAL STATE ----
 let SEARCH = null;
 let AVAIL = null;
 
-// Filters
 let FILTER_COMPLEX = "all";
+let VIEW_MODE = "week"; // default to week view
+let currentDate = new Date();
 
-// View mode: "day" or "week" (default week)
-let VIEW_MODE = "week";
-
-// Time constants
+// ---- TIME CONSTANTS ----
 const START_HOUR = 8;
 const END_HOUR = 21;
 const PIXELS_PER_MIN = 1;
@@ -113,7 +113,7 @@ function buildFieldComplexMapForDay(dayData) {
   return map;
 }
 
-// ---- SUBTRACT HALF-FIELD USAGE ----
+// ---- SUBTRACT HALF-FIELD USAGE FROM FULL-FIELD AVAILABILITY ----
 function subtractUsage(fullWindows, halfUsage) {
   const result = [];
 
@@ -145,7 +145,7 @@ function subtractUsage(fullWindows, halfUsage) {
   return result;
 }
 
-// ---- MERGE SAME-TIME BLOCKS ----
+// ---- MERGE SAME-TIME BLOCKS PER FIELD ----
 function mergeSameTimeBlocks(blocks) {
   const merged = [];
 
@@ -215,8 +215,9 @@ function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
   if (type === "full") {
     let fullAvail = dayData.availability[fieldId] || [];
 
+    // Correct half-field detection: parent === full field id, type === "half"
     const halfFields = dayData.fields.filter(f =>
-      f.name === fieldId && f.complex === "half"
+      f.parent === fieldId && f.complex === "half"
     );
 
     const halfUsage = [];
@@ -280,7 +281,7 @@ function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
   return blocks;
 }
 
-// ---- BUILD TIME SLICES ----
+// ---- BUILD TIME SLICES FOR A COMPLEX ----
 function buildComplexSlices(complexFields, dayData, FIELD_MAP) {
   const changePoints = new Set();
   const perFieldBlocks = {};
@@ -358,9 +359,6 @@ function assignEventLanes(slice) {
   };
 }
 
-// ---- GLOBAL STATE ----
-let currentDate = new Date(); // today
-
 // ---- FILTER BAR (LOCATION BUTTONS ONLY) ----
 function renderFilters(fields, FIELD_COMPLEX_MAP) {
   const filterDiv = document.getElementById("filter-bar");
@@ -396,7 +394,7 @@ function renderFilters(fields, FIELD_COMPLEX_MAP) {
   filterDiv.appendChild(locContainer);
 }
 
-// ---- CORE TIMELINE RENDER FOR A SINGLE DAY (DAY VIEW, complexes side-by-side) ----
+// ---- DAY VIEW: SINGLE DATE, COMPLEXES SIDE-BY-SIDE ----
 function renderDayTimelineForDate(dateObj, container) {
   const dateKey = formatDateKey(dateObj);
 
@@ -442,7 +440,7 @@ function renderDayTimelineForDate(dateObj, container) {
     timeCol.appendChild(label);
   }
 
-  // Legend
+  // Legend (smaller)
   const legend = document.createElement("div");
   legend.className = "timeline-legend";
   legend.innerHTML = `
@@ -511,7 +509,7 @@ function renderDayTimelineForDate(dateObj, container) {
       const totalLanes = laneCount + (hasAvailabilityLane ? 1 : 0);
       const laneWidthPercent = 100 / totalLanes;
 
-      // Availability lane (merged if identical)
+      // Availability lane (merged if identical labels)
       if (hasAvailabilityLane) {
         const allSame = freeFields.every(f => f.label === freeFields[0].label);
         const freeLabels = allSame
@@ -534,7 +532,7 @@ function renderDayTimelineForDate(dateObj, container) {
         complexRow.appendChild(blockDiv);
       }
 
-      // Event lanes (practice = green, game = blue, admin = red)
+      // Event lanes
       events.forEach(ev => {
         const blockDiv = document.createElement("div");
 
@@ -560,13 +558,13 @@ function renderDayTimelineForDate(dateObj, container) {
   });
 }
 
-// ---- DAY VIEW TIMELINE WRAPPER ----
+// ---- DAY VIEW WRAPPER ----
 function renderTimeline() {
   const tl = document.getElementById("dayTimeline");
   renderDayTimelineForDate(currentDate, tl);
 }
 
-// ---- WEEK VIEW (horizontal, complexes side-by-side, filterable) ----
+// ---- WEEK VIEW: 7 DAYS, COMPLEXES SIDE-BY-SIDE ----
 function renderWeekView() {
   const weekContainer = document.getElementById("weekTimeline");
 
@@ -662,11 +660,17 @@ function renderWeekDayColumn(dateObj, container) {
     return;
   }
 
+  // Equal-width complex columns within the day
+  container.style.display = "flex";
+  container.style.flexDirection = "row";
+  container.style.gap = "8px";
+
   locKeys.forEach(loc => {
     const complexFields = complexes[loc];
 
     const complexCol = document.createElement("div");
     complexCol.className = "week-complex-column";
+    complexCol.style.flex = "1 1 0";
 
     // Collapse toggle
     const header = document.createElement("div");
@@ -704,7 +708,7 @@ function renderWeekDayColumn(dateObj, container) {
       const totalLanes = laneCount + (hasAvailabilityLane ? 1 : 0);
       const laneWidthPercent = 100 / totalLanes;
 
-      // Availability lane (merged if identical)
+      // Availability lane (merged if identical labels)
       if (hasAvailabilityLane) {
         const allSame = freeFields.every(f => f.label === freeFields[0].label);
         const freeLabels = allSame
