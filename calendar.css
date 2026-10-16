@@ -323,24 +323,22 @@ body {
 /* Complexes side-by-side inside each day */
 
 .week-day-timeline {
-  display: flex;
-  flex-direction: row;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   position: relative;
   height: calc((21 - 8) * 60px);
-  padding: 4px 6px 8px;
   gap: 10px;
 }
 
-/* Each complex column inside a day */
-
 .week-complex-column {
-  flex: 1;
-  min-width: 180px;
   border-radius: 4px;
   border: 1px solid #d0d5e0;
   background: #f7f9fc;
   position: relative;
+  padding: 4px;
 }
+
 
 /* --------------------------------------------------
    Blocks (shared)
