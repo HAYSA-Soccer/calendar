@@ -1224,55 +1224,42 @@ function debugMergedBlocks(blocks) {
 // ------------------------------------------------------------
 
 // Build unified blocks for rendering (free, practice, game, admin)
-function buildUnifiedBlocks(fieldAvail, fieldOriginal) {
-  const blocks = [];
+// ------------------------------------------------------------
+// BUILD UNIFIED BLOCKS (PATCHED FOR YOUR JSON FORMAT)
+// ------------------------------------------------------------
+function buildUnifiedBlocks(dayData) {
+  const blocks = {};
 
-  // Free windows
-  fieldAvail.free.forEach(win => {
-    blocks.push({
-      start: win.start,
-      end: win.end,
-      type: "free",
-      title: null,
-      fieldName: fieldOriginal.name
-    });
+  // Step 1: Build field-level blocks using your JSON structure
+  const fieldBlocks = buildDayAvailability(dayData);
+
+  // Step 2: Normalize each field's block list
+  Object.keys(fieldBlocks).forEach(fieldId => {
+    const list = fieldBlocks[fieldId] || [];
+
+    // Ensure list is always an array
+    if (!Array.isArray(list)) {
+      blocks[fieldId] = [];
+      return;
+    }
+
+    // Normalize block objects
+    blocks[fieldId] = list.map(b => ({
+      field: fieldId,
+      start: b.start,
+      end: b.end,
+      type: b.type || "free",
+      title: b.title || "",
+      team: b.team || "",
+      coach: b.coach || "",
+      grade: b.grade || "",
+      source: b.source || ""
+    }));
   });
 
-  // Practice
-  fieldAvail.practice.forEach(p => {
-    blocks.push({
-      start: p.start,
-      end: p.end,
-      type: "practice",
-      title: p.team,
-      fieldName: fieldOriginal.name
-    });
-  });
-
-  // Games
-  fieldAvail.games.forEach(g => {
-    blocks.push({
-      start: g.start,
-      end: g.end,
-      type: "game",
-      title: `${g.home} vs ${g.away}`,
-      fieldName: fieldOriginal.name
-    });
-  });
-
-  // Admin
-  fieldAvail.admin.forEach(a => {
-    blocks.push({
-      start: a.start,
-      end: a.end,
-      type: "admin",
-      title: a.reason,
-      fieldName: fieldOriginal.name
-    });
-  });
-
-  return mergeSameTimeBlocks(blocks);
+  return blocks;
 }
+
 
 // Build unified complex blocks
 function buildUnifiedComplexBlocks(dayData) {
