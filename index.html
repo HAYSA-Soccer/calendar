@@ -8,35 +8,18 @@
 <body>
 
   <header class="app-header">
-    <h1>HAYSA Calendar</h1>
+    <div class="app-header-inner">
+      <h1 class="app-title">HAYSA Calendar</h1>
 
-    <nav class="nav">
-      <button id="dayModeBtn">Day View</button>
-      <button id="weekModeBtn">Week View</button>
-      <button id="monthModeBtn">Month View</button>
-      <button id="searchModeBtn">Search</button>
-    </nav>
+      <nav class="nav">
+        <button id="dayModeBtn" class="mode-btn">Day</button>
+        <button id="weekModeBtn" class="mode-btn">Week</button>
+      </nav>
+    </div>
   </header>
 
-  <main class="main-container">
-    <div id="view-header" class="view-header">
-      <div class="controls">
-        <button id="prevPeriod" class="nav-btn">←</button>
-        <span id="periodLabel" class="period-label"></span>
-        <button id="nextPeriod" class="nav-btn">→</button>
-      </div>
-    </div>
-
-    <div id="filter-bar" class="filter-bar"></div>
-
-    <!-- Day timeline (vertical) -->
-    <div id="dayTimeline" class="timeline-container"></div>
-
-    <!-- Week timeline (horizontal, complexes side-by-side) -->
-    <div id="weekTimeline" class="timeline-container"></div>
-  </main>
+  <main id="view-container"></main>
 
   <script src="calendar.js?v=4"></script>
-
 </body>
 </html>
