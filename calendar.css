@@ -232,6 +232,39 @@ body {
   color: #555;
 }
 
+/* Horizontal grid lines */
+
+.time-grid-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed #e0e4ef;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Sunset line */
+
+.sunset-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed #e53935;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.sunset-label {
+  position: absolute;
+  right: 4px;
+  top: -9px;
+  font-size: 10px;
+  color: #e53935;
+  background: #fff;
+  padding: 0 3px;
+  border-radius: 3px;
+}
+
 /* --------------------------------------------------
    DAY VIEW (complexes side-by-side)
 -------------------------------------------------- */
@@ -334,11 +367,10 @@ body {
 /* Complexes side-by-side inside each day */
 
 .week-day-timeline {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 1fr;
+  display: flex;
+  flex-direction: row;
   position: relative;
-  height: calc((21 - 8) * 60px);
+  height: calc((21 - 8) * 60px * 0.5);
   padding: 4px;
   gap: 6px;
 }
@@ -351,6 +383,34 @@ body {
   background: #f7f9fc;
   position: relative;
   padding: 4px;
+  flex: 1 1 0;
+}
+
+/* Complex header styling */
+
+.week-complex-column > div:first-child {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1f3b5b;
+  margin-bottom: 4px;
+}
+
+/* Colored borders per complex (example mapping) */
+
+.week-complex-column[data-loc="Turf"] {
+  border-left: 4px solid #4caf50;
+}
+
+.week-complex-column[data-loc="Sumner/Sean Joyce"] {
+  border-left: 4px solid #2196f3;
+}
+
+.week-complex-column[data-loc="Brookville"] {
+  border-left: 4px solid #ff9800;
+}
+
+.week-complex-column[data-loc="Butler"] {
+  border-left: 4px solid #9c27b0;
 }
 
 /* --------------------------------------------------
@@ -367,6 +427,7 @@ body {
   white-space: normal;
   word-wrap: break-word;
   line-height: 1.25;
+  z-index: 3;
 }
 
 /* Compact block formatting */
