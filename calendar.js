@@ -45,6 +45,34 @@ function formatHumanDate(dateStr) {
   });
 }
 
+function mergeSlices(slices) {
+  const merged = [];
+  let current = null;
+
+  slices.forEach(slice => {
+    if (!current) {
+      current = { ...slice };
+      return;
+    }
+
+    const same =
+      JSON.stringify(slice.fields) === JSON.stringify(current.fields);
+
+    if (same) {
+      current.end = slice.end;
+    } else {
+      merged.push(current);
+      current = { ...slice };
+    }
+  });
+
+  if (current) merged.push(current);
+
+  return merged;
+}
+
+
+
 function formatShortDate(dateStr) {
   const [y, m, d] = dateStr.split("-").map(Number);
   const dt = new Date(y, m - 1, d);
@@ -458,7 +486,7 @@ function renderDayTimelineForDate(dateObj, container) {
     complexRow.style.height = `${(END_HOUR - START_HOUR) * 60 * PIXELS_PER_MIN}px`;
     complexContainer.appendChild(complexRow);
 
-    const slices = buildComplexSlices(complexFields, dayData, FIELD_MAP);
+    const slices = mergeSlices(buildComplexSlices(complexFields, dayData, FIELD_MAP));
 
     slices.forEach(slice => {
       const startMin = timeToMinutes(slice.start) - START_HOUR * 60;
@@ -651,7 +679,8 @@ function renderWeekDayColumn(dateObj, container) {
     inner.style.height = `${(END_HOUR - START_HOUR) * 60 * PIXELS_PER_MIN}px`;
     complexCol.appendChild(inner);
 
-    const slices = buildComplexSlices(complexFields, dayData, FIELD_MAP);
+    const slices = mergeSlices(buildComplexSlices(complexFields, dayData, FIELD_MAP));
+
 
     slices.forEach(slice => {
       const startMin = timeToMinutes(slice.start) - START_HOUR * 60;
