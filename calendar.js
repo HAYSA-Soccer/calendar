@@ -33,32 +33,16 @@ async function loadAvailability() {
 
     const data = await res.json();
 
-    // Expected JSON shape:
-    // {
-    //   "lastUpdated": "...",
-    //   "days": [
-    //     {
-    //       "date": "2026-10-12",   // MUST be YYYY-MM-DD
-    //       "sunset": "18:10",
-    //       "fields": [ ... ]
-    //     },
-    //     ...
-    //   ]
-    // }
-
     AVAIL = {};
 
-    if (Array.isArray(data.days)) {
-      data.days.forEach(day => {
-        const dateKey = day.date; // "YYYY-MM-DD"
-
-        AVAIL[dateKey] = {
-          sunset: day.sunset,
-          fields: day.fields || []
-        };
+    // Your JSON uses: days: { "2026-10-12": { ... }, ... }
+    if (data.days && typeof data.days === "object" && !Array.isArray(data.days)) {
+      Object.keys(data.days).forEach(dateKey => {
+        const day = data.days[dateKey];
+        AVAIL[dateKey] = day;
       });
     } else {
-      console.error("availability.json missing 'days' array");
+      console.error("availability.json missing 'days' object");
     }
 
     const stamp = document.getElementById("lastUpdated");
@@ -71,6 +55,7 @@ async function loadAvailability() {
     console.error("Error loading availability.json", err);
   }
 }
+
 
 
 // ---- DATE HELPERS ----
