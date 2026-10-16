@@ -1,7 +1,4 @@
-// calendar.js — v7 (full rewrite)
-// Clean UI, day + week views, complexes side-by-side, filters, today button,
-// merged availability slices, equal-width columns, improved palette,
-// correct turf availability (full vs half), proper text wrapping.
+// calendar.js — v7 (cleaned + optimized)
 
 // ---- GLOBAL STATE ----
 let SEARCH = null;
@@ -10,6 +7,7 @@ let AVAIL = null;
 let FILTER_COMPLEX = "all";
 let VIEW_MODE = "week"; // default to week view
 let currentDate = new Date();
+let LAST_UPDATED = null;
 
 // ---- TIME CONSTANTS ----
 const START_HOUR = 8;
@@ -25,6 +23,17 @@ async function loadSearchIndex() {
 async function loadAvailability() {
   const resp = await fetch("data/availability.json");
   AVAIL = await resp.json();
+
+  LAST_UPDATED = new Date().toLocaleString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+
+  const el = document.getElementById("lastUpdated");
+  if (el) el.textContent = `Last updated: ${LAST_UPDATED}`;
 }
 
 // ---- DATE HELPERS ----
@@ -58,8 +67,8 @@ function formatShortDate(dateStr) {
 
 function getMondayOfWeek(date) {
   const d = new Date(date);
-  const day = d.getDay(); // 0 = Sun, 1 = Mon, ...
-  const diff = (day === 0 ? -6 : 1 - day); // move to Monday
+  const day = d.getDay();
+  const diff = (day === 0 ? -6 : 1 - day);
   d.setDate(d.getDate() + diff);
   return d;
 }
@@ -90,7 +99,6 @@ function buildFieldComplexMapForDay(dayData) {
   const map = {};
   const eventsByField = dayData.events || {};
 
-  // 1. Assign locations from events (field_group)
   Object.keys(eventsByField).forEach(fieldId => {
     eventsByField[fieldId].forEach(ev => {
       if (ev.field_group) {
@@ -100,10 +108,9 @@ function buildFieldComplexMapForDay(dayData) {
     });
   });
 
-  // 2. Assign missing fields based on parent full-field
   dayData.fields.forEach(f => {
     if (!map[f.id]) {
-      const parent = f.name; // full-field parent id
+      const parent = f.name;
       if (map[parent]) {
         map[f.id] = map[parent];
       }
@@ -172,11 +179,9 @@ function mergeSameTimeBlocks(blocks) {
 
 function classifyColor(ev) {
   const s = ev.status;
-
   if (s === "free") return "free";
   if (s === "practice") return "practice";
   if (s === "game") return "game";
-
   return "admin";
 }
 
@@ -215,7 +220,6 @@ function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
   if (type === "full") {
     let fullAvail = dayData.availability[fieldId] || [];
 
-    // Correct half-field detection: parent === full field id, type === "half"
     const halfFields = dayData.fields.filter(f =>
       f.parent === fieldId && f.complex === "half"
     );
@@ -228,13 +232,11 @@ function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
       });
     });
 
-    // Fallback: if no availability, treat as fully available for the day
     if (fullAvail.length === 0) {
       const startStr = `${String(START_HOUR).padStart(2, "0")}:00`;
       const endStr = `${String(END_HOUR).padStart(2, "0")}:00`;
       fullAvail = [{ start: startStr, end: endStr }];
 
-      // In fallback mode, do NOT subtract half usage so turf still shows availability
       const trueAvail = fullAvail;
 
       blocks = trueAvail.map(win => ({
@@ -416,7 +418,6 @@ function renderDayTimelineForDate(dateObj, container) {
 
   const FIELD_COMPLEX_MAP = buildFieldComplexMapForDay(dayData);
 
-  // Filters only in Day View container
   renderFilters(fields, FIELD_COMPLEX_MAP);
 
   const FIELD_MAP = {};
@@ -430,7 +431,6 @@ function renderDayTimelineForDate(dateObj, container) {
     };
   });
 
-  // Time ruler
   for (let h = START_HOUR; h <= END_HOUR; h++) {
     const top = (h - START_HOUR) * 60 * PIXELS_PER_MIN;
     const label = document.createElement("div");
@@ -440,7 +440,6 @@ function renderDayTimelineForDate(dateObj, container) {
     timeCol.appendChild(label);
   }
 
-  // Legend (smaller)
   const legend = document.createElement("div");
   legend.className = "timeline-legend";
   legend.innerHTML = `
@@ -451,7 +450,6 @@ function renderDayTimelineForDate(dateObj, container) {
   `;
   complexWrapper.appendChild(legend);
 
-  // Group fields by location
   const complexes = {};
   fields.forEach(f => {
     const loc = FIELD_COMPLEX_MAP[f.id];
@@ -509,7 +507,6 @@ function renderDayTimelineForDate(dateObj, container) {
       const totalLanes = laneCount + (hasAvailabilityLane ? 1 : 0);
       const laneWidthPercent = 100 / totalLanes;
 
-      // Availability lane (merged if identical labels)
       if (hasAvailabilityLane) {
         const allSame = freeFields.every(f => f.label === freeFields[0].label);
         const freeLabels = allSame
@@ -525,17 +522,16 @@ function renderDayTimelineForDate(dateObj, container) {
         blockDiv.style.width = `${laneWidthPercent}%`;
 
         blockDiv.innerHTML = `
-          <strong>Available:</strong><br>
-          ${freeLabels}
+          <div class="block-time">${to12h(slice.start)} – ${to12h(slice.end)}</div>
+          <div class="block-main">Available</div>
         `;
+        blockDiv.title = `Available: ${freeLabels}`;
 
         complexRow.appendChild(blockDiv);
       }
 
-      // Event lanes
       events.forEach(ev => {
         const blockDiv = document.createElement("div");
-
         const colorType = classifyColor(ev);
         blockDiv.className = `timeline-block timeline-${colorType}`;
 
@@ -546,9 +542,10 @@ function renderDayTimelineForDate(dateObj, container) {
 
         const label = ev.title || ev.status.toUpperCase();
         blockDiv.innerHTML = `
-          ${to12h(slice.start)} – ${to12h(slice.end)}<br>
-          ${label} — ${ev.label}
+          <div class="block-time">${to12h(slice.start)} – ${to12h(slice.end)}</div>
+          <div class="block-main">${label}</div>
         `;
+        blockDiv.title = `${label} — ${ev.label}`;
 
         complexRow.appendChild(blockDiv);
       });
@@ -576,7 +573,6 @@ function renderWeekView() {
   const timeCol = weekContainer.querySelector(".timeline-times");
   const daysContainer = weekContainer.querySelector(".week-days-container");
 
-  // Shared time ruler
   for (let h = START_HOUR; h <= END_HOUR; h++) {
     const top = (h - START_HOUR) * 60 * PIXELS_PER_MIN;
     const label = document.createElement("div");
@@ -596,7 +592,6 @@ function renderWeekView() {
     const dayCol = document.createElement("div");
     dayCol.className = "week-day-column";
 
-    // Today highlight
     if (dateKey === formatDateKey(new Date())) {
       dayCol.classList.add("today");
     }
@@ -640,7 +635,6 @@ function renderWeekDayColumn(dateObj, container) {
     };
   });
 
-  // Group fields by location
   const complexes = {};
   fields.forEach(f => {
     const loc = FIELD_COMPLEX_MAP[f.id];
@@ -649,7 +643,6 @@ function renderWeekDayColumn(dateObj, container) {
     complexes[loc].push(f);
   });
 
-  // Filter complexes
   const locKeys = Object.keys(complexes).filter(loc => {
     if (FILTER_COMPLEX === "all") return true;
     return FILTER_COMPLEX === loc;
@@ -660,7 +653,6 @@ function renderWeekDayColumn(dateObj, container) {
     return;
   }
 
-  // Equal-width complex columns within the day
   container.style.display = "flex";
   container.style.flexDirection = "row";
   container.style.gap = "8px";
@@ -672,7 +664,6 @@ function renderWeekDayColumn(dateObj, container) {
     complexCol.className = "week-complex-column";
     complexCol.style.flex = "1 1 0";
 
-    // Collapse toggle
     const header = document.createElement("div");
     header.style.fontSize = "12px";
     header.style.fontWeight = "600";
@@ -708,7 +699,6 @@ function renderWeekDayColumn(dateObj, container) {
       const totalLanes = laneCount + (hasAvailabilityLane ? 1 : 0);
       const laneWidthPercent = 100 / totalLanes;
 
-      // Availability lane (merged if identical labels)
       if (hasAvailabilityLane) {
         const allSame = freeFields.every(f => f.label === freeFields[0].label);
         const freeLabels = allSame
@@ -724,14 +714,14 @@ function renderWeekDayColumn(dateObj, container) {
         blockDiv.style.width = `${laneWidthPercent}%`;
 
         blockDiv.innerHTML = `
-          <strong>Available:</strong><br>
-          ${freeLabels}
+          <div class="block-time">${to12h(slice.start)} – ${to12h(slice.end)}</div>
+          <div class="block-main">Available</div>
         `;
+        blockDiv.title = `Available: ${freeLabels}`;
 
         inner.appendChild(blockDiv);
       }
 
-      // Events
       events.forEach(ev => {
         const blockDiv = document.createElement("div");
         blockDiv.className = `timeline-block timeline-${classifyColor(ev)}`;
@@ -741,11 +731,12 @@ function renderWeekDayColumn(dateObj, container) {
         blockDiv.style.left = `${ev._lane * laneWidthPercent}%`;
         blockDiv.style.width = `${laneWidthPercent}%`;
 
+        const mainLabel = ev.title || ev.status.toUpperCase();
         blockDiv.innerHTML = `
-          ${to12h(slice.start)} – ${to12h(slice.end)}<br>
-          ${ev.title || ev.status.toUpperCase()}<br>
-          ${ev.label}
+          <div class="block-time">${to12h(slice.start)} – ${to12h(slice.end)}</div>
+          <div class="block-main">${mainLabel}</div>
         `;
+        blockDiv.title = `${mainLabel} — ${ev.label}`;
 
         inner.appendChild(blockDiv);
       });
@@ -797,7 +788,6 @@ function render() {
     <div id="weekTimeline" class="${VIEW_MODE === "week" ? "" : "hidden"}"></div>
   `;
 
-  // Mode toggle
   document.getElementById("dayModeBtn").onclick = () => {
     VIEW_MODE = "day";
     render();
@@ -807,7 +797,6 @@ function render() {
     render();
   };
 
-  // Navigation (day vs week)
   document.getElementById("prevPeriod").onclick = () => {
     currentDate.setDate(currentDate.getDate() + (VIEW_MODE === "day" ? -1 : -7));
     render();
@@ -818,13 +807,11 @@ function render() {
     render();
   };
 
-  // Today button
   document.getElementById("todayBtn").onclick = () => {
     currentDate = new Date();
     render();
   };
 
-  // Render appropriate view
   if (VIEW_MODE === "day") {
     renderTimeline();
   } else {
