@@ -503,7 +503,7 @@ function renderTimeline() {
   renderDayTimelineForDate(currentDate, tl);
 }
 
-// ---- WEEK VIEW (HORIZONTAL) ----
+// ---- WEEK VIEW (horizontal) ----
 function renderWeekView() {
   const weekContainer = document.getElementById("weekTimeline");
 
@@ -515,7 +515,7 @@ function renderWeekView() {
   const timeCol = weekContainer.querySelector(".timeline-times");
   const daysContainer = weekContainer.querySelector(".week-days-container");
 
-  // Time ruler (shared for all days)
+  // Shared time ruler
   for (let h = START_HOUR; h <= END_HOUR; h++) {
     const top = (h - START_HOUR) * 60 * PIXELS_PER_MIN;
     const label = document.createElement("div");
@@ -535,6 +535,11 @@ function renderWeekView() {
     const dayCol = document.createElement("div");
     dayCol.className = "week-day-column";
 
+    // Today highlight
+    if (dateKey === formatDateKey(new Date())) {
+      dayCol.classList.add("today");
+    }
+
     const header = document.createElement("div");
     header.className = "week-day-header";
     header.textContent = formatShortDate(dateKey);
@@ -542,16 +547,107 @@ function renderWeekView() {
 
     const dayTimeline = document.createElement("div");
     dayTimeline.className = "week-day-timeline";
-    dayTimeline.style.position = "relative";
-    dayTimeline.style.height = `${(END_HOUR - START_HOUR) * 60 * PIXELS_PER_MIN}px`;
     dayCol.appendChild(dayTimeline);
 
     daysContainer.appendChild(dayCol);
 
-    // Render the selected complex (or all) into this day's column
     renderWeekDayColumn(day, dayTimeline);
   }
 }
+
+function renderWeekDayColumn(dateObj, container) {
+  const dateKey = formatDateKey(dateObj);
+
+  if (!AVAIL || !AVAIL.days || !AVAIL.days[dateKey]) {
+    container.innerHTML = `<p class="no-data">No availability.</p>`;
+    return;
+  }
+
+  const dayData = AVAIL.days[dateKey];
+  const fields = dayData.fields;
+
+  const FIELD_COMPLEX_MAP = buildFieldComplexMapForDay(dayData);
+
+  const FIELD_MAP = {};
+  fields.forEach(f => {
+    FIELD_MAP[f.id] = {
+      id: f.id,
+      parent: f.name,
+      type: f.complex,
+      surface: f.surface,
+      location: FIELD_COMPLEX_MAP[f.id] || null
+    };
+  });
+
+  // Group fields by location
+  const complexes = {};
+  fields.forEach(f => {
+    const loc = FIELD_COMPLEX_MAP[f.id];
+    if (!loc) return;
+    if (!complexes[loc]) complexes[loc] = [];
+    complexes[loc].push(f);
+  });
+
+  // Render ALL complexes side-by-side
+  Object.keys(complexes).forEach(loc => {
+    const complexFields = complexes[loc];
+
+    const complexCol = document.createElement("div");
+    complexCol.className = "week-complex-column";
+    container.appendChild(complexCol);
+
+    const slices = buildComplexSlices(complexFields, dayData, FIELD_MAP);
+
+    slices.forEach(slice => {
+      const startMin = timeToMinutes(slice.start) - START_HOUR * 60;
+      const endMin = timeToMinutes(slice.end) - START_HOUR * 60;
+
+      const { events, freeFields, laneCount } = assignEventLanes(slice);
+
+      const hasAvailabilityLane = freeFields.length > 0;
+      const totalLanes = laneCount + (hasAvailabilityLane ? 1 : 0);
+      const laneWidthPercent = 100 / totalLanes;
+
+      // Availability lane
+      if (hasAvailabilityLane) {
+        const blockDiv = document.createElement("div");
+        blockDiv.className = "timeline-block timeline-free";
+
+        blockDiv.style.top = `${startMin}px`;
+        blockDiv.style.height = `${endMin - startMin}px`;
+        blockDiv.style.left = `${laneCount * laneWidthPercent}%`;
+        blockDiv.style.width = `${laneWidthPercent}%`;
+
+        blockDiv.innerHTML = `
+          <strong>Available:</strong><br>
+          ${freeFields.map(f => f.label).join(", ")}
+        `;
+
+        complexCol.appendChild(blockDiv);
+      }
+
+      // Events
+      events.forEach(ev => {
+        const blockDiv = document.createElement("div");
+        blockDiv.className = `timeline-block timeline-${classifyColor(ev)}`;
+
+        blockDiv.style.top = `${startMin}px`;
+        blockDiv.style.height = `${endMin - startMin}px`;
+        blockDiv.style.left = `${ev._lane * laneWidthPercent}%`;
+        blockDiv.style.width = `${laneWidthPercent}%`;
+
+        blockDiv.innerHTML = `
+          ${to12h(slice.start)} – ${to12h(slice.end)}<br>
+          ${ev.title || ev.status.toUpperCase()}<br>
+          ${ev.label}
+        `;
+
+        complexCol.appendChild(blockDiv);
+      });
+    });
+  });
+}
+
 
 function renderWeekDayColumn(dateObj, container) {
   const dateKey = formatDateKey(dateObj);
