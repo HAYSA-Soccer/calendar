@@ -2,7 +2,7 @@
 
 let SEARCH = null;
 let AVAIL = null;
-
+ 
 // Filters
 let FILTER_COMPLEX = "all";
 
