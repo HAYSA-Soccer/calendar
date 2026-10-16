@@ -2,25 +2,32 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Test Calendar</title>
+  <title>HAYSA Calendar</title>
   <link rel="stylesheet" href="calendar.css?v=1">
 </head>
 <body>
 
-  <h1>Test Calendar</h1>
+  <header class="app-header">
+    <h1>HAYSA Calendar</h1>
 
-  <nav class="nav">
-    <button data-view="day">Day</button>
-    <button data-view="week">Week</button>
-    <button data-view="month">Month</button>
-    <button data-view="search">Search</button>
-  </nav>
+    <nav class="nav">
+      <button data-view="day">Day</button>
+      <button data-view="week">Week</button>
+      <button data-view="month">Month</button>
+      <button data-view="search">Search</button>
+    </nav>
+  </header>
 
+  <!-- Main dynamic container -->
   <main id="view-container"></main>
 
-  <div id="dayTimeline"></div>
+  <!-- Day timeline (vertical) -->
+  <div id="dayTimeline" class="timeline-container"></div>
 
-  <!-- Your JS lives HERE, not inline -->
+  <!-- Week timeline (horizontal) -->
+  <div id="weekTimeline" class="timeline-container"></div>
+
+  <!-- JS -->
   <script src="calendar.js?v=1"></script>
 
 </body>
