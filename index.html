@@ -3,30 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <title>Test Calendar</title>
-  <link rel="stylesheet" href="calendar.css?v=2">
+  <link rel="stylesheet" href="calendar.css?v=3">
 </head>
 <body>
 
   <header class="app-header">
-    <h1>Test Calendar</h1>
+    <div class="app-header-inner">
+      <h1 class="app-title">Test Calendar</h1>
 
-    <nav class="nav">
-      <button data-view="day">Day</button>
-      <button data-view="week">Week</button>
-      <button data-view="month">Month</button>
-      <button data-view="search">Search</button>
-    </nav>
+      <nav class="nav">
+        <button data-view="day">Day</button>
+        <button data-view="week">Week</button>
+        <button data-view="month">Month</button>
+        <button data-view="search">Search</button>
+      </nav>
+    </div>
+    <div id="lastUpdated" class="last-updated"></div>
   </header>
 
   <main id="view-container"></main>
 
-  <!-- Day timeline -->
-  <div id="dayTimeline" class="timeline-container"></div>
-
-  <!-- Week timeline (horizontal) -->
-  <div id="weekTimeline" class="timeline-container"></div>
-
-  <script src="calendar.js?v=2"></script>
+  <script src="calendar.js?v=3"></script>
 
 </body>
 </html>
