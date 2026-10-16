@@ -1,5 +1,6 @@
-// calendar.js — clean UI, day + week views, complexes side-by-side, filters, today button,
-// merged availability slices, collapse toggles, equal-width columns, improved palette
+// calendar.js — v6
+// Clean UI, day + week views, complexes side-by-side, filters, today button,
+// merged availability slices, equal-width columns, improved palette, turf availability fix.
 
 let SEARCH = null;
 let AVAIL = null;
@@ -44,34 +45,6 @@ function formatHumanDate(dateStr) {
     day: "numeric"
   });
 }
-
-function mergeSlices(slices) {
-  const merged = [];
-  let current = null;
-
-  slices.forEach(slice => {
-    if (!current) {
-      current = { ...slice };
-      return;
-    }
-
-    const same =
-      JSON.stringify(slice.fields) === JSON.stringify(current.fields);
-
-    if (same) {
-      current.end = slice.end;
-    } else {
-      merged.push(current);
-      current = { ...slice };
-    }
-  });
-
-  if (current) merged.push(current);
-
-  return merged;
-}
-
-
 
 function formatShortDate(dateStr) {
   const [y, m, d] = dateStr.split("-").map(Number);
@@ -207,6 +180,33 @@ function classifyColor(ev) {
   return "admin";
 }
 
+// ---- MERGE ADJACENT SLICES WITH IDENTICAL FIELD STATES ----
+function mergeSlices(slices) {
+  const merged = [];
+  let current = null;
+
+  slices.forEach(slice => {
+    if (!current) {
+      current = { ...slice };
+      return;
+    }
+
+    const same =
+      JSON.stringify(slice.fields) === JSON.stringify(current.fields);
+
+    if (same) {
+      current.end = slice.end;
+    } else {
+      merged.push(current);
+      current = { ...slice };
+    }
+  });
+
+  if (current) merged.push(current);
+
+  return merged;
+}
+
 // ---- BUILD BLOCKS FOR A FIELD ----
 function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
   const type = FIELD_MAP[fieldId].type;
@@ -227,24 +227,37 @@ function buildFieldBlocks(fieldId, dayData, FIELD_MAP) {
       });
     });
 
-    // Fallback: if no availability, treat as fully available
+    // Fallback: if no availability, treat as fully available for the day
     if (fullAvail.length === 0) {
       const startStr = `${String(START_HOUR).padStart(2, "0")}:00`;
       const endStr = `${String(END_HOUR).padStart(2, "0")}:00`;
       fullAvail = [{ start: startStr, end: endStr }];
+
+      // In fallback mode, do NOT subtract half usage so turf still shows availability
+      const trueAvail = fullAvail;
+
+      blocks = trueAvail.map(win => ({
+        field: fieldId,
+        type: "free",
+        start: win.start,
+        end: win.end,
+        start_12: to12h(win.start),
+        end_12: to12h(win.end),
+        title: null
+      }));
+    } else {
+      const trueAvail = subtractUsage(fullAvail, halfUsage);
+
+      blocks = trueAvail.map(win => ({
+        field: fieldId,
+        type: "free",
+        start: win.start,
+        end: win.end,
+        start_12: to12h(win.start),
+        end_12: to12h(win.end),
+        title: null
+      }));
     }
-
-    const trueAvail = subtractUsage(fullAvail, halfUsage);
-
-    blocks = trueAvail.map(win => ({
-      field: fieldId,
-      type: "free",
-      start: win.start,
-      end: win.end,
-      start_12: to12h(win.start),
-      end_12: to12h(win.end),
-      title: null
-    }));
   }
 
   if (type === "half") {
@@ -322,7 +335,7 @@ function buildComplexSlices(complexFields, dayData, FIELD_MAP) {
     slices.push(slice);
   }
 
-  return slices;
+  return mergeSlices(slices);
 }
 
 // ---- ASSIGN LANES ----
@@ -486,7 +499,7 @@ function renderDayTimelineForDate(dateObj, container) {
     complexRow.style.height = `${(END_HOUR - START_HOUR) * 60 * PIXELS_PER_MIN}px`;
     complexContainer.appendChild(complexRow);
 
-    const slices = mergeSlices(buildComplexSlices(complexFields, dayData, FIELD_MAP));
+    const slices = buildComplexSlices(complexFields, dayData, FIELD_MAP);
 
     slices.forEach(slice => {
       const startMin = timeToMinutes(slice.start) - START_HOUR * 60;
@@ -679,8 +692,7 @@ function renderWeekDayColumn(dateObj, container) {
     inner.style.height = `${(END_HOUR - START_HOUR) * 60 * PIXELS_PER_MIN}px`;
     complexCol.appendChild(inner);
 
-    const slices = mergeSlices(buildComplexSlices(complexFields, dayData, FIELD_MAP));
-
+    const slices = buildComplexSlices(complexFields, dayData, FIELD_MAP);
 
     slices.forEach(slice => {
       const startMin = timeToMinutes(slice.start) - START_HOUR * 60;
@@ -815,5 +827,3 @@ function render() {
     renderWeekView();
   }
 }
-
-  
