@@ -97,16 +97,30 @@ function getMondayOfWeek(date) {
 
 // ---- TIME HELPERS ----
 function to12h(t) {
-  const [h, m] = t.split(":").map(Number);
+  if (!t || typeof t !== "string") {
+    console.warn("Invalid time for to12h:", t);
+    return "";
+  }
+
+  const parts = t.split(":");
+  if (parts.length !== 2) {
+    console.warn("Malformed time string for to12h:", t);
+    return "";
+  }
+
+  let [h, m] = parts.map(Number);
   const suffix = h >= 12 ? "PM" : "AM";
-  const hour = ((h + 11) % 12 + 1);
-  return `${hour}:${m.toString().padStart(2, "0")} ${suffix}`;
+  h = h % 12;
+  if (h === 0) h = 12;
+
+  return `${h}:${m.toString().padStart(2, "0")} ${suffix}`;
 }
+
 
 function timeToMinutes(t) {
   if (!t || typeof t !== "string") {
     console.warn("Invalid time value:", t);
-    return 0; // fallback so UI doesn't crash
+    return 0;
   }
 
   const parts = t.split(":");
@@ -118,6 +132,7 @@ function timeToMinutes(t) {
   const [h, m] = parts.map(Number);
   return h * 60 + m;
 }
+
 
 // ---- COMPLEX MAPPING ----
 // Maps each field ID to one of your four complexes
@@ -1162,6 +1177,12 @@ function buildSunsetLine(container, sunsetTime) {
 // Build blocks inside a timeline column
 function buildBlocks(container, blocks) {
   blocks.forEach(b => {
+    // Skip malformed blocks
+    if (!b || !b.start || !b.end) {
+      console.warn("Skipping malformed block:", b);
+      return;
+    }
+
     const startMin = timeToMinutes(b.start);
     const endMin = timeToMinutes(b.end);
 
@@ -1181,7 +1202,7 @@ function buildBlocks(container, blocks) {
     main.className = "block-main";
     main.textContent = b.titles && b.titles.length > 0
       ? b.titles.join(", ")
-      : b.fieldName;
+      : b.fieldName || "";
 
     div.appendChild(time);
     div.appendChild(main);
