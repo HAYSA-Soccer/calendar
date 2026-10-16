@@ -104,7 +104,18 @@ function to12h(t) {
 }
 
 function timeToMinutes(t) {
-  const [h, m] = t.split(":").map(Number);
+  if (!t || typeof t !== "string") {
+    console.warn("Invalid time value:", t);
+    return 0; // fallback so UI doesn't crash
+  }
+
+  const parts = t.split(":");
+  if (parts.length !== 2) {
+    console.warn("Malformed time string:", t);
+    return 0;
+  }
+
+  const [h, m] = parts.map(Number);
   return h * 60 + m;
 }
 
