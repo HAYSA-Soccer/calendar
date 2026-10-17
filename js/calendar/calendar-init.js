@@ -1,7 +1,9 @@
 async function initCalendarUnified() {
+  console.log("initCalendarUnified loaded");
   await loadAvailability();
   renderWeekViewUnified();
 }
+
 
 function renderCurrentViewUnified() {
   renderWeekViewUnified();
