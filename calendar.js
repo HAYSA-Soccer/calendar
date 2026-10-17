@@ -1500,9 +1500,27 @@ function renderWeekViewUnified(startDate) {
       col.appendChild(sunsetLine);
 
       // Blocks
-      complexBlocks[complex].forEach(b => {
+      const list = complexBlocks[complex];
+      
+      // Skip missing or malformed arrays
+      if (!list || !Array.isArray(list)) {
+        console.warn("Skipping malformed complex block array:", complex, list);
+        return;
+      }
+      
+      list.forEach(b => {
+        // Skip malformed blocks
+        if (!b || !b.start || !b.end) {
+          console.warn("Skipping malformed block:", b);
+          return;
+        }
+      
         const startMin = timeToMinutes(b.start);
         const endMin = timeToMinutes(b.end);
+      
+        // ... your existing rendering logic ...
+      });
+
 
         const top = (startMin - START_HOUR * 60) * PIXELS_PER_MIN;
         const height = (endMin - startMin) * PIXELS_PER_MIN;
