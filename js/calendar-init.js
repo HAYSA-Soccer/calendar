@@ -4,7 +4,6 @@ async function initCalendarUnified() {
   renderWeekViewUnified();
 }
 
-
 function renderCurrentViewUnified() {
   renderWeekViewUnified();
 }
