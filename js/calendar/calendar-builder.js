@@ -1,16 +1,18 @@
 // ======================================================
-// BUILDER: USE MERGED BLOCKS DIRECTLY
+// BUILDER: USE COMPLEX TIMELINE DIRECTLY
 // ======================================================
 
-// Your availability.json already contains:
-// dayData.merged = [ { field, start, end, type, title, ... }, ... ]
+// dayData.complex_timeline = {
+//   "full": [ { start, end, type, fields }, ... ],
+//   "half": [ ... ],
+//   "TURF": [ ... ],
+//   ...
+// }
 
 function buildUnifiedComplexBlocks(dayData) {
-  // If merged blocks exist, use them directly
-  if (dayData && Array.isArray(dayData.merged)) {
-    return dayData.merged;
+  if (!dayData || !dayData.complex_timeline) {
+    return {};
   }
 
-  // Otherwise return an empty array
-  return [];
+  return dayData.complex_timeline;
 }
