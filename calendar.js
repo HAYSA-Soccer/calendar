@@ -1518,31 +1518,28 @@ function renderWeekViewUnified(startDate) {
         const startMin = timeToMinutes(b.start);
         const endMin = timeToMinutes(b.end);
       
-        // ... your existing rendering logic ...
-      });
-
-
         const top = (startMin - START_HOUR * 60) * PIXELS_PER_MIN;
         const height = (endMin - startMin) * PIXELS_PER_MIN;
-
+      
         const div = document.createElement("div");
         div.className = `timeline-block timeline-${b.type}`;
         div.style.top = `${top}px`;
         div.style.height = `${height}px`;
-
+      
         const time = document.createElement("div");
         time.className = "block-time";
         time.textContent = `${to12h(b.start)} - ${to12h(b.end)}`;
-
+      
         const main = document.createElement("div");
         main.className = "block-main";
-        main.textContent = b.title || b.fieldName;
-
+        main.textContent = b.title || b.fieldName || "";
+      
         div.appendChild(time);
         div.appendChild(main);
-
+      
         col.appendChild(div);
       });
+
 
       dayTimeline.appendChild(col);
     });
