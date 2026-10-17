@@ -1296,14 +1296,14 @@ function buildUnifiedBlocks(dayData) {
 // ------------------------------------------------------------
 // BUILD UNIFIED COMPLEX BLOCKS (PATCHED FOR YOUR JSON FORMAT)
 // ------------------------------------------------------------
-function buildUnifiedComplexBlocks(dayData) {
+function buildUnifiedComplexBlocks(dayData, allComplexes) {
   const unified = {};
-  const blocks = buildUnifiedBlocks(dayData);   // { fieldId: [ ... ] }
+  const blocks = buildUnifiedBlocks(dayData);
 
   // Build complex groups
   const complexMap = buildFieldComplexMapForDay(dayData);
 
-  // ALWAYS initialize every complex column, even if empty
+  // ALWAYS initialize every complex column
   allComplexes.forEach(complex => {
     unified[complex] = [];
   });
@@ -1311,14 +1311,11 @@ function buildUnifiedComplexBlocks(dayData) {
   // Iterate over each field's block list
   Object.keys(blocks).forEach(fieldId => {
     const fieldBlockList = blocks[fieldId];
-
-    // Ensure it's always an array
     if (!Array.isArray(fieldBlockList)) return;
 
     const complex = complexMap[fieldId] || "unknown";
 
     fieldBlockList.forEach(block => {
-      // Skip malformed blocks
       if (!block || !block.start || !block.end) {
         console.warn("Skipping malformed block:", block);
         return;
@@ -1340,6 +1337,7 @@ function buildUnifiedComplexBlocks(dayData) {
 
   return unified;
 }
+
 
 
 
@@ -1479,7 +1477,7 @@ function renderWeekViewUnified(startDate) {
       return;
     }
 
-    const complexBlocks = buildUnifiedComplexBlocks(dayData);
+    const complexBlocks = buildUnifiedComplexBlocks(dayData, allComplexes);
 
     allComplexes.forEach(complex => {
       if (FILTER_COMPLEXES.size > 0 && !FILTER_COMPLEXES.has(complex)) return;
@@ -1573,7 +1571,7 @@ function renderDayViewUnified(dateKey) {
     return;
   }
 
-  const complexBlocks = buildUnifiedComplexBlocks(dayData);
+  const complexBlocks = buildUnifiedComplexBlocks(dayData, allComplexes);
 
   // Header
   const header = document.createElement("div");
@@ -1756,7 +1754,7 @@ function renderDayViewUnified(dateKey) {
     return;
   }
 
-  const complexBlocks = buildUnifiedComplexBlocks(dayData);
+  const complexBlocks = buildUnifiedComplexBlocks(dayData, allComplexes);
 
   // Header
   const header = document.createElement("div");
@@ -2011,7 +2009,7 @@ function debugComplexSummary(dateKey) {
     return;
   }
 
-  const complexBlocks = buildUnifiedComplexBlocks(dayData);
+  const complexBlocks = buildUnifiedComplexBlocks(dayData, allComplexes);
   console.log("Complex summary for", dateKey, summarizeComplexBlocks(complexBlocks));
 }
 
@@ -2184,7 +2182,7 @@ function debugComplexSummary(dateKey) {
     return;
   }
 
-  const complexBlocks = buildUnifiedComplexBlocks(dayData);
+  const complexBlocks = buildUnifiedComplexBlocks(dayData, allComplexes);
   console.log("Complex summary for", dateKey, summarizeComplexBlocks(complexBlocks));
 }
 
@@ -2282,7 +2280,7 @@ function searchTeamAll(teamName) {
 
   Object.keys(AVAIL).forEach(dateKey => {
     const dayData = AVAIL[dateKey];
-    const complexBlocks = buildUnifiedComplexBlocks(dayData);
+    const complexBlocks = buildUnifiedComplexBlocks(dayData, allComplexes);
 
     Object.keys(complexBlocks).forEach(complex => {
       complexBlocks[complex].forEach(b => {
