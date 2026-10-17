@@ -6,6 +6,7 @@ async function initCalendarUnified() {
   await loadAvailability();
   await loadBlocks();
   await loadSunsetTimes();
+  await loadComplexMap();
   renderCurrentViewUnified();
 }
 
@@ -19,15 +20,8 @@ function renderCurrentViewUnified() {
 // EVENT LISTENERS
 // =========================
 
-document.getElementById("next").addEventListener("click", () => {
-  currentDate.setDate(currentDate.getDate() + 7);
-  renderCurrentViewUnified();
-});
-
-document.getElementById("prev").addEventListener("click", () => {
-  currentDate.setDate(currentDate.getDate() - 7);
-  renderCurrentViewUnified();
-});
+// NOTE: Your HTML does NOT have #next or #prev buttons.
+// These listeners must be removed to avoid null errors.
 
 // Start the calendar
 initCalendarUnified();
