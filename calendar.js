@@ -1302,7 +1302,9 @@ function buildUnifiedComplexBlocks(dayData, allComplexes) {
 
   // Build complex groups
   const complexMap = buildFieldComplexMapForDay(dayData);
+  console.log("complexMap:", complexMap);
 
+  
   // ALWAYS initialize every complex column
   allComplexes.forEach(complex => {
     unified[complex] = [];
