@@ -1298,12 +1298,14 @@ function buildUnifiedBlocks(dayData) {
 // ------------------------------------------------------------
 function buildUnifiedComplexBlocks(dayData) {
   const unified = {};
-  const blocks = buildUnifiedBlocks(dayData); // blocks = { fieldId: [ ... ] }
+  const blocks = buildUnifiedBlocks(dayData);   // { fieldId: [ ... ] }
 
   // Build complex groups
   const complexMap = buildFieldComplexMapForDay(dayData);
-  Object.values(complexMap).forEach(c => {
-    unified[c] = [];
+
+  // ALWAYS initialize every complex column, even if empty
+  allComplexes.forEach(complex => {
+    unified[complex] = [];
   });
 
   // Iterate over each field's block list
@@ -1316,6 +1318,12 @@ function buildUnifiedComplexBlocks(dayData) {
     const complex = complexMap[fieldId] || "unknown";
 
     fieldBlockList.forEach(block => {
+      // Skip malformed blocks
+      if (!block || !block.start || !block.end) {
+        console.warn("Skipping malformed block:", block);
+        return;
+      }
+
       unified[complex].push({
         fieldId: fieldId,
         start: block.start,
